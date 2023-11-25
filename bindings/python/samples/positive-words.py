@@ -1,28 +1,28 @@
 #!/usr/bin/env python
 # Display a runtext with double-buffering.
+from models.words import get_positive_word
 from samplebase import SampleBase
 from rgbmatrix import graphics
 import time
-
+import random
 
 class RunText(SampleBase):
     def __init__(self, *args, **kwargs):
         super(RunText, self).__init__(*args, **kwargs)
-        self.parser.add_argument("-t", "--text", help="The text to scroll on the RGB LED panel", default="Hello world!")
 
     def run(self):
         offscreen_canvas = self.matrix.CreateFrameCanvas()
         font = graphics.Font()
-        font.LoadFont("../../../fonts/7x13.bdf")
-        textColor = graphics.Color(255, 255, 0)
+        font.LoadFont("../../../fonts/7x14B.bdf")
+        random_color = graphics.Color(random.randint(0,255), random.randint(0,255), random.randint(0,255))
         pos = offscreen_canvas.width
-        my_text = self.args.text
+        phrase_selected = get_positive_word()
 
         while True:
             offscreen_canvas.Clear()
-            len = graphics.DrawText(offscreen_canvas, font, pos, 10, textColor, my_text)
+            len_word = graphics.DrawText(offscreen_canvas, font, pos, 21, random_color, phrase_selected)
             pos -= 1
-            if (pos + len < 0):
+            if (pos + len_word < 0):
                 pos = offscreen_canvas.width
 
             time.sleep(0.05)
