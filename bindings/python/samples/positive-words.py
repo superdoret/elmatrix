@@ -17,11 +17,13 @@ class RunText(SampleBase):
         random_color = graphics.Color(random.randint(0,255), random.randint(0,255), random.randint(0,255))
         word = get_positive_word().center(10)
 
+        print("Word selected: |" + word + "|")
+
         x = 0
         y = 0
 
-        action = random.randint(1,4)
-
+        #action = random.randint(1,4)
+        action = 1
         if action == 1: #top
             y = -21
             while(y <= 21):
