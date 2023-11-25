@@ -20,8 +20,8 @@ class RunText(SampleBase):
         x = 0
         y = 0
 
-        #action = random.randint(1,4)
-        action = 1
+        action = random.randint(1,4)
+
         if action == 1: #top
             y = -21
             while(y <= 21):
