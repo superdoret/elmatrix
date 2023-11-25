@@ -30,6 +30,7 @@ class RunText(SampleBase):
                 offscreen_canvas.Clear()
                 graphics.DrawText(offscreen_canvas, font, 0, y, random_color, word)
                 time.sleep(0.100)
+                offscreen_canvas = self.matrix.SwapOnVSync(offscreen_canvas)
                 y = y + 1
         elif action == 2:  #'bottom'
             y = 41
@@ -37,6 +38,7 @@ class RunText(SampleBase):
                 offscreen_canvas.Clear()
                 graphics.DrawText(offscreen_canvas, font, 0, y, random_color, word)
                 time.sleep(0.200)
+                offscreen_canvas = self.matrix.SwapOnVSync(offscreen_canvas)
                 y = y - 2
         elif action == 3: # 'left'
             x = -60
@@ -44,6 +46,7 @@ class RunText(SampleBase):
                 offscreen_canvas.Clear()
                 graphics.DrawText(offscreen_canvas, font, x, 21, random_color, word)
                 time.sleep(0.200)
+                offscreen_canvas = self.matrix.SwapOnVSync(offscreen_canvas)
                 x = x + 2
         elif action == 4: #'right':
             x = 60
@@ -51,6 +54,7 @@ class RunText(SampleBase):
                 offscreen_canvas.Clear()
                 graphics.DrawText(offscreen_canvas, font, x, 21, random_color, word)
                 time.sleep(0.200)
+                offscreen_canvas = self.matrix.SwapOnVSync(offscreen_canvas)
                 x = x - 2
         else:
             graphics.DrawText(offscreen_canvas, font, 0, 21, random_color, word)
