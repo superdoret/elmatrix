@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # Display a runtext with double-buffering.
+from models.phrases import get_positive_phrase
 from samplebase import SampleBase
 from rgbmatrix import graphics
 import time
@@ -15,13 +16,13 @@ class RunText(SampleBase):
         font.LoadFont("../../../fonts/7x14B.bdf")
         random_color = graphics.Color(random.randint(0,255), random.randint(0,255), random.randint(0,255))
         pos = offscreen_canvas.width
-        my_text = "EL PRIMER PASO HACIA EL ÉXITO ES CUANDO TE NIEGAS A SER UN PRISIONERO DEL MEDIO AMBIENTE EN EL QUE TE ENCUENTRAS."
+        phrase_selected = get_positive_phrase(self)
 
         while True:
             offscreen_canvas.Clear()
-            len = graphics.DrawText(offscreen_canvas, font, pos, 21, random_color, my_text)
+            len_word = graphics.DrawText(offscreen_canvas, font, pos, 21, random_color, phrase_selected)
             pos -= 1
-            if (pos + len < 0):
+            if (pos + len_word < 0):
                 pos = offscreen_canvas.width
 
             time.sleep(0.05)
