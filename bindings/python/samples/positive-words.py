@@ -43,7 +43,7 @@ class RunText(SampleBase):
             while(x <= 0):
                 offscreen_canvas.Clear()
                 graphics.DrawText(offscreen_canvas, font, x, 21, random_color, word)
-                time.sleep(0.200)
+                time.sleep(0.05)
                 offscreen_canvas = self.matrix.SwapOnVSync(offscreen_canvas)
                 x = x + 2
         elif action == 4: #'right':
@@ -51,7 +51,7 @@ class RunText(SampleBase):
             while(x >= 0):
                 offscreen_canvas.Clear()
                 graphics.DrawText(offscreen_canvas, font, x, 21, random_color, word)
-                time.sleep(0.200)
+                time.sleep(0.05)
                 offscreen_canvas = self.matrix.SwapOnVSync(offscreen_canvas)
                 x = x - 2
         else:
