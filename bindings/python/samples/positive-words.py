@@ -17,8 +17,6 @@ class RunText(SampleBase):
         random_color = graphics.Color(random.randint(0,255), random.randint(0,255), random.randint(0,255))
         word = get_positive_word().center(10)
 
-        print("Word selected: |" + word + "|")
-
         x = 0
         y = 0
 
@@ -29,7 +27,7 @@ class RunText(SampleBase):
             while(y <= 21):
                 offscreen_canvas.Clear()
                 graphics.DrawText(offscreen_canvas, font, 0, y, random_color, word)
-                time.sleep(0.100)
+                time.sleep(0.05)
                 offscreen_canvas = self.matrix.SwapOnVSync(offscreen_canvas)
                 y = y + 1
         elif action == 2:  #'bottom'
@@ -37,7 +35,7 @@ class RunText(SampleBase):
             while(y >= 21):
                 offscreen_canvas.Clear()
                 graphics.DrawText(offscreen_canvas, font, 0, y, random_color, word)
-                time.sleep(0.200)
+                time.sleep(0.05)
                 offscreen_canvas = self.matrix.SwapOnVSync(offscreen_canvas)
                 y = y - 2
         elif action == 3: # 'left'
