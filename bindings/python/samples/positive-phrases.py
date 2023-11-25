@@ -16,7 +16,7 @@ class RunText(SampleBase):
         font.LoadFont("../../../fonts/7x14B.bdf")
         random_color = graphics.Color(random.randint(0,255), random.randint(0,255), random.randint(0,255))
         pos = offscreen_canvas.width
-        phrase_selected = get_positive_phrase(self)
+        phrase_selected = get_positive_phrase()
 
         while True:
             offscreen_canvas.Clear()
