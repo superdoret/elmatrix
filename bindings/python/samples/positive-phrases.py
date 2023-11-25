@@ -5,6 +5,7 @@ from samplebase import SampleBase
 from rgbmatrix import graphics
 import time
 import random
+import sys
 
 class RunText(SampleBase):
     def __init__(self, *args, **kwargs):
@@ -15,54 +16,21 @@ class RunText(SampleBase):
         font = graphics.Font()
         font.LoadFont("../../../fonts/7x14B.bdf")
         random_color = graphics.Color(random.randint(0,255), random.randint(0,255), random.randint(0,255))
-        word = get_positive_phrase().center(10)
+        pos = offscreen_canvas.width
+        phrase_selected = get_positive_phrase()
 
-        x = 0
-        y = 0
+        while True:
+            offscreen_canvas.Clear()
+            len_word = graphics.DrawText(offscreen_canvas, font, pos, 21, random_color, phrase_selected)
+            pos -= 1
+            if (pos + len_word < 0):
+                break
 
-        action = random.randint(1,4)
+            time.sleep(0.05)
+            offscreen_canvas = self.matrix.SwapOnVSync(offscreen_canvas)
 
-        if action == 1: #top
-            y = -21
-            while(y <= 21):
-                offscreen_canvas.Clear()
-                graphics.DrawText(offscreen_canvas, font, 0, y, random_color, word)
-                time.sleep(0.100)
-                y = y + 1
-        elif action == 2:  #'bottom'
-            y = 41
-            while(y >= 21):
-                offscreen_canvas.Clear()
-                graphics.DrawText(offscreen_canvas, font, 0, y, random_color, word)
-                time.sleep(0.200)
-                y = y - 2
-        elif action == 3: # 'left'
-            x = -60
-            while(x <= 0):
-                offscreen_canvas.Clear()
-                graphics.DrawText(offscreen_canvas, font, x, 21, random_color, word)
-                time.sleep(0.200)
-                x = x + 2
-        elif action == 4: #'right':
-            x = 60
-            while(x >= 0):
-                offscreen_canvas.Clear()
-                graphics.DrawText(offscreen_canvas, font, x, 21, random_color, word)
-                time.sleep(0.200)
-                x = x - 2
-        else:
-            graphics.DrawText(offscreen_canvas, font, 0, 21, random_color, word)
-
-        # while True:
-        #     offscreen_canvas.Clear()
-        #     len_word = graphics.DrawText(offscreen_canvas, font, pos, 21, random_color, word_selected)
-        #     pos -= 1
-        #     if (pos + len_word < 0):
-        #         pos = offscreen_canvas.width
-
-        #     time.sleep(0.05)
-        #     offscreen_canvas = self.matrix.SwapOnVSync(offscreen_canvas)
-
+        time.sleep(2)   # show display for 2 seconds before exit
+        sys.exit(0)
 
 # Main function
 if __name__ == "__main__":
