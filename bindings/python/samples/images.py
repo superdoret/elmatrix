@@ -28,13 +28,10 @@ class RunText(Base):
 
         try:
             offscreen_canvas = self.matrix.CreateFrameCanvas()
-            offscreen_canvas.Clear()
             main_directory = "../../../img/fun"
             files = [i for i in glob(f'{main_directory}/*/*') if os.path.isfile(i)]
             random_file = choice(files)
-            print(random_file)
             end_date = datetime.now() + timedelta(seconds=30)
-
             while datetime.now() <= end_date:
                 for frame in self.get_frames(random_file):
                     offscreen_canvas.SetImage(frame)
