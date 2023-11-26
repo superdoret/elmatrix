@@ -15,7 +15,10 @@ class RunText(SampleBase):
         font = graphics.Font()
         font.LoadFont("../../../fonts/7x14B.bdf")
         random_color = graphics.Color(random.randint(0,255), random.randint(0,255), random.randint(0,255))
-        word = get_positive_word().center(10)
+        if self.args.show_clock == True:
+            word = time.strftime('%H:%M').center(10)
+        else:
+            word = get_positive_word().center(10)
 
         x = 0
         y = 0
