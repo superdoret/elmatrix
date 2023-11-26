@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 from models.words import get_positive_word
-from samplebase import SampleBase
+from base import Base
 from rgbmatrix import graphics
 import time
 import random
 import sys
 
-class RunText(SampleBase):
+class RunText(Base):
     def __init__(self, *args, **kwargs):
         super(RunText, self).__init__(*args, **kwargs)
 
@@ -60,7 +60,7 @@ class RunText(SampleBase):
         else:
             graphics.DrawText(offscreen_canvas, font, 0, 21, random_color, word)
 
-        time.sleep(2)   # show display for 2 seconds before exit
+        time.sleep(10)   # show display for 10 seconds before exit
         sys.exit(0)
 
 # Main function

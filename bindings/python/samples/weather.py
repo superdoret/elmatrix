@@ -1,23 +1,26 @@
 #!/usr/bin/env python
-# Display a runtext with double-buffering.
+
 from models.phrases import get_positive_phrase
 from base import Base
 from rgbmatrix import graphics
 import time
 import random
+import os
 import sys
+import asyncio
 
-class RunText(Base):
+class ShowText(Base):
     def __init__(self, *args, **kwargs):
-        super(RunText, self).__init__(*args, **kwargs)
+        super(ShowText, self).__init__(*args, **kwargs)
 
-    def run(self):
+    async def run(self):
+
         offscreen_canvas = self.matrix.CreateFrameCanvas()
         font = graphics.Font()
         font.LoadFont("../../../fonts/7x14B.bdf")
         random_color = graphics.Color(random.randint(0,255), random.randint(0,255), random.randint(0,255))
         pos = offscreen_canvas.width
-        phrase_selected = get_positive_phrase()
+        phrase_selected = "WEATHER"
 
         while True:
             offscreen_canvas.Clear()
@@ -29,11 +32,15 @@ class RunText(Base):
             time.sleep(0.05)
             offscreen_canvas = self.matrix.SwapOnVSync(offscreen_canvas)
 
-        time.sleep(2)   # show display for 2 seconds before exit
+
+        time.sleep(5)   # show display for 2 seconds before exit
         sys.exit(0)
 
 # Main function
 if __name__ == "__main__":
-    run_text = RunText()
-    if (not run_text.process()):
-        run_text.print_help()
+    if os.name == 'nt':
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+    mainModule = ShowText()
+    if (not asyncio.run(mainModule.process())):
+        mainModule.print_help()
