@@ -36,7 +36,7 @@ class RunText(Base):
             end_date = datetime.now() + timedelta(seconds=30)
 
             while datetime.now() <= end_date:
-                for frame in Images.get_frames(self, random_file):
+                for frame in self.get_frames(random_file):
                     offscreen_canvas.SetImage(frame)
                     time.sleep(frame.info['duration']/1000)
                     offscreen_canvas = self.matrix.SwapOnVSync(offscreen_canvas)
