@@ -71,6 +71,6 @@ if __name__ == "__main__":
     if os.name == 'nt':
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-    mainModule = ShowText()
+    mainModule = RunText()
     if (not asyncio.run(mainModule.process())):
         mainModule.print_help()
