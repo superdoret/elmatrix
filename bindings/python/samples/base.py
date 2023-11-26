@@ -38,7 +38,7 @@ class Base(object):
     def run(self):
         print("Running")
 
-    def process(self):
+    async def process(self):
         self.args = self.parser.parse_args()
 
         options = RGBMatrixOptions()
@@ -73,10 +73,14 @@ class Base(object):
 
         try:
             # Start loop
-            print("Press CTRL-C to stop sample")
-            self.run()
+            print("+***********************************************************************************+")
+            print("▒           Welcome to eLMaTrIx - Todos los derechos son revervados para mi         ▒")
+            print("+***********************************************************************************+")
+            await self.run()
         except KeyboardInterrupt:
+            print("+***********************************************************************************+")
+            print("▒           Gracias por usar la mejor app escrita en este lenguaje de mierda        ▒")
+            print("+***********************************************************************************+")
             print("Exiting\n")
             sys.exit(0)
-
         return True
