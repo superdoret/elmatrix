@@ -15,7 +15,7 @@ class RunText(Base):
 
     async def run(self):
         try:
-            command_selected = get_command(self)
+            command_selected = get_command()
 
             print("command selected: " + command_selected)
 
