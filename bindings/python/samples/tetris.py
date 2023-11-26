@@ -1,8 +1,6 @@
 #!/usr/bin/env python
-# Display a runtext with double-buffering.
-from models.phrases import get_positive_phrase
 from base import Base
-import lib.tetris_led as tetris
+import libs.tetris_led as tetris
 
 import time
 import sys
