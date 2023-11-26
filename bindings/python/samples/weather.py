@@ -29,13 +29,13 @@ class ShowText(Base):
 
                 canvas = self.matrix.CreateFrameCanvas()
                 font = graphics.Font()
-                font.LoadFont("../../fonts/7x14B.bdf")
+                font.LoadFont("../../../fonts/7x14B.bdf")
 
                 kind = str(weather.current.kind)
                 kind = kind.upper().replace(" ", "_")
                 print(kind)
 
-                image_weather_path = "../img/weather/" + kind + ".PNG"
+                image_weather_path = "../../../img/weather/" + kind + ".PNG"
 
                 if os.path.exists(image_weather_path):
                     print('The file ' + image_weather_path + ' exists!')
@@ -43,7 +43,7 @@ class ShowText(Base):
                     image_weather.thumbnail((15, 15), Image.ANTIALIAS)
                 else:
                     print('The file ' + image_weather_path + ' does not exist.')
-                    image_weather_path = "../img/weather/none.png"
+                    image_weather_path = "../../../img/weather/none.png"
 
                 random_color_first_line = graphics.Color(random.randint(0,255), random.randint(0,255), random.randint(0,255))
                 random_color_second_line = graphics.Color(random.randint(0,255), random.randint(0,255), random.randint(0,255))
