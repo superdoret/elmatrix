@@ -2,15 +2,18 @@
 from models.words import get_positive_word
 from base import Base
 from rgbmatrix import graphics
+
 import time
 import random
 import sys
+import asyncio
+import os
 
 class RunText(Base):
     def __init__(self, *args, **kwargs):
         super(RunText, self).__init__(*args, **kwargs)
 
-    def run(self):
+    async def run(self):
         offscreen_canvas = self.matrix.CreateFrameCanvas()
         font = graphics.Font()
         font.LoadFont("../../../fonts/7x14B.bdf")
@@ -65,6 +68,9 @@ class RunText(Base):
 
 # Main function
 if __name__ == "__main__":
-    run_text = RunText()
-    if (not run_text.process()):
-        run_text.print_help()
+    if os.name == 'nt':
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+    mainModule = ShowText()
+    if (not asyncio.run(mainModule.process())):
+        mainModule.print_help()
