@@ -30,6 +30,7 @@ class Base(object):
         self.parser.add_argument("--led-panel-type", action="store", help="Needed to initialize special panels. Supported: 'FM6126A'", default="", type=str)
         self.parser.add_argument("--led-no-drop-privs", dest="drop_privileges", help="Don't drop privileges from 'root' after initializing the hardware.", action='store_false')
         self.parser.add_argument("--show-clock", action="store", help="Show a clock", default=False, type=bool)
+        self.parser.add_argument("--city", action="store", help="Set a city to know the weather", default="", type=str)
         self.parser.set_defaults(drop_privileges=True)
 
     def usleep(self, value):

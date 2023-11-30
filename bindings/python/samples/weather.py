@@ -21,7 +21,10 @@ class ShowText(Base):
         try:
             async with python_weather.Client(unit=python_weather.METRIC) as client:
 
-                city = Cities.get_random_one(self)
+                city=self.args.city
+                if city == "":
+                    city = Cities.get_random_one(self)
+
                 weather = await client.get(city)
 
                 temperature = str(weather.current.temperature) + "ºC"
