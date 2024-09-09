@@ -3,8 +3,11 @@ import random
 
 class Cities():
     def get_random_one(self):
+        # cities = [
+        #     "Barcelona", "Rosario", "Madrid", "Copenhagen", "Rome", "Bologna", "Paris", "Alsace", "Zurich", "Sant Jordi"
+        # ]
         cities = [
-            "Barcelona", "Rosario", "Madrid", "Copenhagen", "Rome", "Bologna", "Paris", "Alsace", "Zurich", "Sant Jordi"
+            "Sant Jordi"
         ]
 
         pickup_position = random.randint(0,len(cities)-1)
