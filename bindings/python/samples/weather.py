@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from models.cities import Cities
+from models.cities import get_random_city
 from base import Base
 from rgbmatrix import graphics
 from PIL import Image
@@ -23,7 +23,7 @@ class ShowText(Base):
 
                 city=self.args.city
                 if city == "":
-                    city = Cities.get_random_one(self)
+                    city = get_random_city(self)
 
                 weather = await client.get(city)
 
