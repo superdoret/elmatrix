@@ -23,7 +23,7 @@ class ShowText(Base):
 
                 city=self.args.city
                 if city == "":
-                    city = get_random_city(self)
+                    city = get_random_city()
 
                 weather = await client.get(city)
 
