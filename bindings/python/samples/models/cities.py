@@ -4,8 +4,8 @@ import random
 class Cities():
     def get_random_one(self):
          cities = [
-             "Sant Jordi, Islas Baleares", "Barcelona", "Rosario", "Madrid", "Copenhagen", "Rome", "Bologna", "Paris", "Alsace", "Zurich"
+             "Vinaros, Islas Baleares", "Barcelona", "Rosario", "Madrid", "Copenhagen", "Rome", "Bologna", "Paris", "Alsace", "Zurich"
          ]
 
-        pickup_position = random.randint(0,len(cities)-1)
-        return cities[pickup_position]
+    pickup_position = random.randint(0,len(cities)-1)
+    return cities[pickup_position]
