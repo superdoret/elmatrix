@@ -14,3 +14,6 @@ src/libs/site-packages/
 
 # runtime data (settings, caches)
 src/data/
+
+# gentle-ai tooling (local skill registry, contains absolute paths)
+.atl/
