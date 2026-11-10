@@ -1,0 +1,7 @@
+python-weather
+pillow
+setuptools
+cython
+numpy
+psutil
+tzdata
