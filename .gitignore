@@ -17,3 +17,6 @@ src/data/
 
 # gentle-ai tooling (local skill registry, contains absolute paths)
 .atl/
+
+# webOS packages
+*.ipk
