@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from base import Base
 import paths
+import settings
 from random import choice
 from PIL import Image, ImageSequence
 from datetime import datetime, timedelta
@@ -32,7 +33,7 @@ class RunText(Base):
             main_directory = paths.FUN_DIR
             files = [i for i in glob(f'{main_directory}/*/*') if os.path.isfile(i)]
             random_file = choice(files)
-            end_date = datetime.now() + timedelta(seconds=30)
+            end_date = datetime.now() + timedelta(seconds=settings.widget_cfg("images")["duration"])
             while datetime.now() <= end_date:
                 for frame in self.get_frames(random_file):
                     offscreen_canvas.SetImage(frame)

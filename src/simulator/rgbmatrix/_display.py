@@ -5,6 +5,7 @@ pixel buffer; this module (main thread) paints that buffer ~60 times/second.
 """
 import os
 import threading
+import time
 
 SCALE = int(os.environ.get("SIM_SCALE", "12"))
 
@@ -16,6 +17,22 @@ class Display(object):
         self.brightness = max(1, min(100, brightness))
         self.source = lambda: [(0, 0, 0)] * (width * height)
         self.closed = False
+
+    def snapshot(self, attempts=5):
+        """Returns (width, height, rgb bytes) of a frame that is stable between
+        two reads (direct drawing is not atomic), with brightness applied."""
+        k = self.brightness / 100.0
+        last = None
+        for _ in range(attempts):
+            frame = list(self.source())
+            if frame == last:
+                break
+            last = frame
+            time.sleep(0.008)
+        data = bytearray()
+        for r, g, b in last:
+            data += bytes((int(r * k), int(g * k), int(b * k)))
+        return self.width, self.height, bytes(data)
 
     def run_gui(self, worker):
         """Blocks in the Tk main loop while `worker` runs in a daemon thread."""

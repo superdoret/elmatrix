@@ -11,3 +11,6 @@ __pycache__/
 # dependencies installed by `make deps` / pip (platform specific)
 src/libs/site-packages/
 .venv/
+
+# runtime data (settings, caches)
+src/data/

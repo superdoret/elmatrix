@@ -25,6 +25,14 @@ LIBS_DIR = os.path.join(BASE_DIR, "libs")
 SITE_PACKAGES = os.path.join(LIBS_DIR, "site-packages")
 
 
+def data_dir():
+    """Writable runtime data (settings, caches). Override with ELMATRIX_DATA_DIR."""
+    d = os.environ.get("ELMATRIX_DATA_DIR") or os.path.join(BASE_DIR, "data")
+    d = os.path.abspath(d)
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
 def font(name):
     return os.path.join(FONTS_DIR, name)
 

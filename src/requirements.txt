@@ -3,3 +3,5 @@ pillow
 setuptools
 cython
 numpy
+psutil
+tzdata

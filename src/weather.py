@@ -3,6 +3,7 @@
 from models.cities import get_random_city
 from base import Base
 import paths
+import settings
 from rgbmatrix import graphics
 from PIL import Image
 
@@ -23,6 +24,8 @@ class ShowText(Base):
             async with python_weather.Client(unit=python_weather.METRIC) as client:
 
                 city=self.args.city
+                if city == "":
+                    city = settings.widget_cfg("weather")["city"]  # set in the web panel
                 if city == "":
                     city = get_random_city()
 
