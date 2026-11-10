@@ -14,6 +14,10 @@
       rng: o.rng || Math.random, FB: FB, TL: TL, widgetName: o.name || ''
     };
 
+    ctx.audio = o.audio || null;
+    /* Ask for a music track (e.g. 'christmas'). The app restores the default track when the widget ends. */
+    ctx.requestTrack = function (name) { if (ctx.audio) { try { ctx.audio.setTrack(name); } catch (e) { /* silent */ } } };
+
     ctx.date = function () { return new Date(o.nowMs ? o.nowMs() : Date.now()); };
     ctx.present = function () { if (o.present) o.present(); };
     ctx.sleep = function (ms) { return control.sleep(ms); };

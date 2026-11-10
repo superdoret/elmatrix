@@ -38,6 +38,7 @@
       case 'ok': case 'red': return 'openSettings';
       case 'info': case 'up': case 'down': return 'showHint';
       case 'green': return 'next';
+      case 'blue': return 'toggleMusic';
       default: return null;
     }
   }
