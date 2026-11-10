@@ -1,0 +1,130 @@
+#!/usr/bin/env python
+
+from models.cities import get_random_city
+from base import Base
+import paths
+from rgbmatrix import graphics
+from PIL import Image
+
+import time
+import random
+import os
+import sys
+import asyncio
+import python_weather
+
+class ShowText(Base):
+    def __init__(self, *args, **kwargs):
+        super(ShowText, self).__init__(*args, **kwargs)
+
+    async def run(self):
+
+        try:
+            async with python_weather.Client(unit=python_weather.METRIC) as client:
+
+                city=self.args.city
+                if city == "":
+                    city = get_random_city()
+
+                weather = await client.get(city)
+
+                current = getattr(weather, "current", weather)  # python-weather 1.x vs 2.x
+                temperature = str(current.temperature) + "ºC"
+                city = city.center(10)
+
+                canvas = self.matrix.CreateFrameCanvas()
+                font = graphics.Font()
+                font.LoadFont(paths.font("7x14B.bdf"))
+
+                kind = getattr(current.kind, "name", str(current.kind))
+                kind = kind.upper().replace(" ", "_")
+                print(kind)
+
+                image_weather_path = paths.WEATHER_DIR + "/" + kind + ".PNG"
+
+                if os.path.exists(image_weather_path):
+                    print('The file ' + image_weather_path + ' exists!')
+                    image_weather = Image.open(image_weather_path)
+                    image_weather.thumbnail((15, 15), Image.LANCZOS)
+                else:
+                    print('The file ' + image_weather_path + ' does not exist.')
+                    image_weather_path = paths.WEATHER_DIR + "/NONE.PNG"
+                    image_weather = Image.open(image_weather_path)
+                    image_weather.thumbnail((15, 15), Image.LANCZOS)
+
+                random_color_first_line = graphics.Color(random.randint(0,255), random.randint(0,255), random.randint(0,255))
+                random_color_second_line = graphics.Color(random.randint(0,255), random.randint(0,255), random.randint(0,255))
+
+                x = 0
+                y = 0
+
+                action = random.randint(1,4)
+                first_line_gap = 15
+                max_top_second_line = 26
+
+                if action == 1: #top
+                    y = max_top_second_line * -1
+                    while(y <= max_top_second_line):
+                        canvas.Clear()
+                        y_first_line = y - first_line_gap
+                        graphics.DrawText(canvas, font, 1, y_first_line, random_color_first_line, city)
+                        graphics.DrawText(canvas, font, 25, y, random_color_second_line, temperature)
+                        if os.path.exists(image_weather_path):
+                            canvas.SetImage(image_weather.convert('RGB'), 5, y_first_line + 3)
+                        time.sleep(0.150)
+                        canvas = self.matrix.SwapOnVSync(canvas)
+                        y = y + 2
+                elif action == 2:  #'bottom'
+                    y = 41
+                    while(y >= max_top_second_line):
+                        canvas.Clear()
+                        y_first_line = y - first_line_gap
+                        graphics.DrawText(canvas, font, 1, y_first_line, random_color_first_line, city)
+                        graphics.DrawText(canvas, font, 25, y, random_color_second_line, temperature)
+                        if os.path.exists(image_weather_path):
+                            canvas.SetImage(image_weather.convert('RGB'), 5, y_first_line + 3)
+                        time.sleep(0.150)
+                        canvas = self.matrix.SwapOnVSync(canvas)
+                        y = y - 2
+                elif action == 3: # 'left'
+                    x = -60
+                    y_first_line = max_top_second_line - first_line_gap
+                    while(x <= 0):
+                        canvas.Clear()
+                        graphics.DrawText(canvas, font, x, y_first_line, random_color_first_line, city)
+                        graphics.DrawText(canvas, font, x + 25, max_top_second_line, random_color_second_line, temperature)
+                        if os.path.exists(image_weather_path):
+                            canvas.SetImage(image_weather.convert('RGB'), x + 5, max_top_second_line - 13)
+                        time.sleep(0.150)
+                        canvas = self.matrix.SwapOnVSync(canvas)
+                        x = x + 2
+                elif action == 4: #'right':
+                    x = 60
+                    y_first_line = max_top_second_line - first_line_gap
+                    while(x >= 0):
+                        canvas.Clear()
+                        graphics.DrawText(canvas, font, x, y_first_line, random_color_first_line, city)
+                        graphics.DrawText(canvas, font, x + 25, max_top_second_line, random_color_second_line, temperature)
+                        if os.path.exists(image_weather_path):
+                            canvas.SetImage(image_weather.convert('RGB'), x + 5, max_top_second_line - 13)
+                        time.sleep(0.150)
+                        canvas = self.matrix.SwapOnVSync(canvas)
+                        x = x - 2
+                else:
+                    graphics.DrawText(canvas, font, 0, max_top_second_line, random_color_second_line, temperature)
+                    canvas = self.matrix.SwapOnVSync(canvas)
+        except Exception as ex:
+            print("Error in Weather: " + str(ex))
+            return
+
+        time.sleep(5)   # show display for 2 seconds before exit
+        sys.exit(0)
+
+# Main function
+if __name__ == "__main__":
+    if os.name == 'nt':
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+    mainModule = ShowText()
+    if (not asyncio.run(mainModule.process())):
+        mainModule.print_help()

@@ -1,0 +1,5 @@
+python-weather
+pillow
+setuptools
+cython
+numpy

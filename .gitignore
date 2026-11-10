@@ -1,0 +1,13 @@
+# build products
+build/
+*.o
+*.a
+*.so
+*.so.*
+libs/rgbmatrix/*.cpp
+__pycache__/
+*.pyc
+
+# dependencies installed by `make deps` / pip (platform specific)
+src/libs/site-packages/
+.venv/
