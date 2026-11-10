@@ -95,7 +95,7 @@ test('settings model: navigate, adjust number and select with left/right', () =>
 
 test('settings model: OK toggles a widget, right opens its options, back returns', () => {
   const { m, settings, saved } = model();
-  press(m, 'down', 'down'); // first widget row (phrases)
+  for (let i = 0; i < 10 && m.view().rows[m.view().cursor].label !== 'Frases positivas'; i++) m.handleKey('down'); // first widget row
   assert.strictEqual(m.view().rows[m.view().cursor].label, 'Frases positivas');
   press(m, 'ok');
   assert.strictEqual(settings.widgets.phrases.enabled, false);

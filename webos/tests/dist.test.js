@@ -95,3 +95,14 @@ test('dist HTML has no inline modern-only constructs and loads nothing external'
   assert.ok(!/https?:\/\//.test(html.replace(/<html[^>]*>/, '')));
   assert.ok(!/type="module"|nomodule/.test(html));
 });
+
+test('audio engine only uses Web Audio calls available on Chromium 38 and guards resume()', () => {
+  const src = fs.readFileSync(path.join(root, 'js', 'audio.js'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  assert.ok(/webkitAudioContext/.test(src), 'prefixed constructor fallback');
+  const resumes = src.match(/\.resume\(/g) || [];
+  assert.strictEqual(resumes.length, 1);
+  assert.ok(/typeof ctx\.resume === 'function'/.test(src), 'resume() must be feature-checked');
+  assert.ok(!/\.state\s*=[^=]/.test(src));
+  // ctx.state may be undefined on old engines: only compared, never required
+  assert.ok(/ctx\.state === undefined/.test(src));
+});

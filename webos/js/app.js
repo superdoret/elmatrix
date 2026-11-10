@@ -50,12 +50,40 @@
       if (f.key === m2[2]) settings.widgets[w.id].config[f.key] = E.settings.coerceField(f, f.type === 'list' ? m2[3].split(';') : m2[3]);
     });
   });
-  var renderer, fonts, scheduler, net, model;
+  var renderer, fonts, scheduler, net, model, audio = null;
   var settingsOpen = false, hintTimer = null, toastTimer = null, pausedByVisibility = false;
 
   function realFetch(url, opts) {
     if (forceOffline) return Promise.reject(new Error('offline (forced)'));
     return fetch(url, opts);
+  }
+
+  // ---- music ----
+  var soundHint = document.getElementById('sound-hint');
+  function applyAudio() {
+    if (!audio) return;
+    audio.setEnabled(!!settings.global.music_enabled);
+    audio.setVolume(settings.global.music_volume / 100);
+    audio.setSource(settings.global.music_source);
+    audio.setStation(settings.global.music_station);
+    audio.setChristmasSource(settings.global.christmas_source);
+  }
+  function updateSoundHint() {
+    if (soundHint) soundHint.hidden = !(audio && audio.available && audio.needsGesture && settings.global.music_enabled);
+  }
+  function initAudio() {
+    if (params.get('music') === '0') return;
+    try {
+      audio = E.audio.createEngine({ onStatus: function () { updateSoundHint(); if (settingsOpen) renderCredit(); },
+        source: settings.global.music_source, station: settings.global.music_station, christmasSource: settings.global.christmas_source });
+      applyAudio();
+      if (audio.init()) { audio.start(); updateSoundHint(); } else audio = null;
+    } catch (e) { audio = null; if (window.console) console.warn('audio disabled:', e); }
+  }
+
+  function renderCredit() {
+    var el = document.getElementById('s-credit');
+    if (el) el.textContent = 'Radio: SomaFM (somafm.com)' + (audio ? '  ·  ' + audio.describe() : '');
   }
 
   // ---- overlay helpers ----
@@ -78,6 +106,7 @@
     var v = model.view(), body = document.getElementById('s-body');
     document.getElementById('s-title').textContent = v.title;
     document.getElementById('s-hint').textContent = v.hint;
+    renderCredit();
     body.textContent = '';
     if (v.mode === 'keyboard') {
       var t = document.createElement('div');
@@ -115,7 +144,7 @@
   }
 
   function openSettings() {
-    model = new E.settingsmodel.SettingsModel(settings, { onChange: function () { store.save(); } });
+    model = new E.settingsmodel.SettingsModel(settings, { onChange: function () { store.save(); applyAudio(); updateSoundHint(); } });
     settingsOpen = true;
     settingsEl.hidden = false;
     hint.hidden = true;
@@ -129,6 +158,7 @@
 
   // ---- keys ----
   function onKey(e) {
+    if (audio && audio.needsGesture) audio.unlock(); // browsers start audio only after a key press
     var name = E.keys.keyName(e);
     if (settingsOpen) {
       if (model.isKeyboard()) {
@@ -150,6 +180,11 @@
     else if (action === 'prev') scheduler.prev();
     else if (action === 'togglePause') scheduler.togglePause();
     else if (action === 'openSettings') openSettings();
+    else if (action === 'toggleMusic') {
+      settings.global.music_enabled = !settings.global.music_enabled;
+      store.save(); applyAudio(); updateSoundHint();
+      showToast(settings.global.music_enabled ? 'Música: encendida' : 'Música: apagada', scheduler.paused);
+    }
     else showHint();
   }
 
@@ -161,12 +196,13 @@
     var fb = renderer.fb;
     fb.clear(0);
     var ctx = E.context.createContext({
-      fb: fb, fonts: fonts, cfg: cfg, control: control, net: net, rng: rng,
+      fb: fb, fonts: fonts, cfg: cfg, control: control, net: net, rng: rng, audio: audio,
       present: function () { renderer.markDirty(); },
       name: E.catalog.byId(id).name.toUpperCase(),
       nowMs: function () { return Date.now() + timeOffset; }
     });
-    return widget.run(ctx);
+    var release = function () { if (audio) audio.setTrack(null); }; // back to the default track
+    return widget.run(ctx).then(release, function (err) { release(); throw err; });
   }
 
   function enabledIds() {
@@ -204,6 +240,7 @@
       runWidget: runWidget, onEvent: onEvent, rng: rng
     });
     renderer.start();
+    initAudio();
     document.addEventListener('keydown', onKey);
     document.addEventListener('visibilitychange', function () {
       if (document.hidden && !scheduler.paused) { scheduler.pause(); pausedByVisibility = true; }
@@ -215,7 +252,7 @@
       resizeTimer = setTimeout(function () { renderer.layout(window.innerWidth, window.innerHeight); scheduler.skip(); }, 300);
     });
     if (params.get('settings') === '1') openSettings();
-    window.__elmatrix = { scheduler: scheduler, renderer: renderer, model: function () { return model; } }; // test hook
+    window.__elmatrix = { scheduler: scheduler, renderer: renderer, audio: audio, model: function () { return model; } }; // test hook
     showHint();
     scheduler.start();
   }

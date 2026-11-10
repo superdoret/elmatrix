@@ -43,3 +43,6 @@ canvas#matrix { display: block; background: #050509; }
 .key { min-width: 2.1rem; padding: 0.3rem 0.4rem; text-align: center; border: 2px solid #2a2a44; border-radius: 0.3rem; font-size: 0.95rem; background: #14142a; }
 .key.focus { border-color: #ffd23c; background: rgba(255, 210, 60, 0.2); }
 .key.wide { min-width: 4rem; }
+
+.hint.sound { top: 3%; bottom: auto; color: #ffd23c; }
+.s-hint.credit { margin-top: 0.1rem; color: #6a6a80; }
