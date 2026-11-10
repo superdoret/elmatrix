@@ -43,7 +43,8 @@ Extend the webOS TV app (`webos/`, already merged in PR #2) with:
 T5-T8: delegated writer (agent a0e6ac3, has full context of `webos/`). Single writer, sequential.
 
 ## Progress
-- Branch created from origin/main (2b8086e). Nothing implemented yet. Engram mirror: pending.
+- T5-T8 implemented and committed (4 work-unit commits on feat/webos-music-modes). Verified by unit tests and screenshots;
+  sound, the live radio stream and Chromium 38 execution are NOT verified. Review: not run (see PR). Engram mirror: pending.
 
 ## Verification (observed, writer)
 - `cd webos && node --test`: 175 pass (audio engine with fake AudioContext/clock, stream state machine, carol sequencing, 8 new modes' logic, ES5 guards on dist).
