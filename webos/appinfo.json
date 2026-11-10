@@ -1,0 +1,12 @@
+{
+  "id": "com.elmatrix.tv",
+  "version": "1.0.0",
+  "vendor": "eLMaTrIx",
+  "type": "web",
+  "main": "index.html",
+  "title": "eLMaTrIx",
+  "icon": "icon.png",
+  "largeIcon": "largeIcon.png",
+  "disallowScrolling": true,
+  "resolution": "1920x1080"
+}
