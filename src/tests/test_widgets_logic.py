@@ -173,6 +173,12 @@ class SportsTests(unittest.TestCase):
         self.assertIsNone(sports.pick_team({"teams": None}, "x"))
         self.assertIsNone(sports.pick_team(None, "x"))
 
+    def test_sports_key_maps_the_disabled_free_key(self):
+        for value in ("3", " 3 ", "", None):
+            self.assertEqual(sports.sports_key(value), "123")
+        self.assertEqual(sports.sports_key("123"), "123")
+        self.assertEqual(sports.sports_key("mykey"), "mykey")
+
     def test_parse_last_and_next(self):
         last = {"results": [
             {"strHomeTeam": "A", "strAwayTeam": "B", "intHomeScore": "1", "intAwayScore": "0",

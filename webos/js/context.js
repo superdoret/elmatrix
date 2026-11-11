@@ -14,6 +14,10 @@
       rng: o.rng || Math.random, FB: FB, TL: TL, widgetName: o.name || ''
     };
 
+    ctx.audio = o.audio || null;
+    /* Ask for a music track (e.g. 'christmas'). The app restores the default track when the widget ends. */
+    ctx.requestTrack = function (name) { if (ctx.audio) { try { ctx.audio.setTrack(name); } catch (e) { /* silent */ } } };
+
     ctx.date = function () { return new Date(o.nowMs ? o.nowMs() : Date.now()); };
     ctx.present = function () { if (o.present) o.present(); };
     ctx.sleep = function (ms) { return control.sleep(ms); };
@@ -36,17 +40,23 @@
 
     /* Frame loop for `seconds` of unpaused time at `fps`. draw(t, frame) renders into ctx.fb;
      * returning 'stop' ends the loop early. Resolves with the elapsed seconds. */
-    ctx.loop = async function (seconds, fps, draw) {
-      var start = control.activeNow(), frame = 0, interval = 1000 / fps, t = 0;
+    ctx.loop = async function (seconds, fps, draw, opts) {
+      var start = control.activeNow(), frame = 0, interval = 1000 / fps, t = 0, fixed = !!(opts && opts.fixed);
       for (;;) {
         t = (control.activeNow() - start) / 1000;
-        if (t >= seconds) break;
+        // Pinned mode ("fijar"): the duration is treated as infinite, centrally for every widget. Unpinning ends the
+        // loop at once if the duration already elapsed. `fixed` loops (one-shot content) never extend.
+        if (t >= seconds && (fixed || !(control.isPinned && control.isPinned()))) break;
         if (draw(t, frame++) === 'stop') break;
         ctx.present();
         await control.sleep(interval);
       }
       return t;
     };
+
+    /* Loop whose length is part of the content (a scrolling phrase, an error screen): it never stretches while the mode
+     * is pinned; the scheduler re-runs the widget immediately instead. */
+    ctx.loopFixed = function (seconds, fps, draw) { return ctx.loop(seconds, fps, draw, { fixed: true }); };
 
     // Draw text fitted to a box with one of the allowed fonts; returns its metrics.
     ctx.fit = function (text, names, maxW, maxH, maxScale) {
@@ -74,7 +84,7 @@
     ctx.offline = async function (title, seconds) {
       var amber = 0xffb020, dim = 0x806010;
       var cx = Math.floor(fb.w / 2), cy = Math.floor(fb.h * 0.30);
-      await ctx.loop(seconds || 5, 4, function (t) {
+      await ctx.loopFixed(seconds || 5, 4, function (t) {
         fb.clear(0);
         var blink = Math.floor(t * 2) % 2 === 0;
         var c = blink ? amber : dim;

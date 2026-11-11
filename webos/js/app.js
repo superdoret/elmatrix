@@ -50,12 +50,59 @@
       if (f.key === m2[2]) settings.widgets[w.id].config[f.key] = E.settings.coerceField(f, f.type === 'list' ? m2[3].split(';') : m2[3]);
     });
   });
-  var renderer, fonts, scheduler, net, model;
-  var settingsOpen = false, hintTimer = null, toastTimer = null, pausedByVisibility = false;
+  var renderer, fonts, scheduler, net, model, audio = null;
+  var lastToastId = null, settingsOpen = false, hintTimer = null, toastTimer = null, pausedByVisibility = false;
 
   function realFetch(url, opts) {
     if (forceOffline) return Promise.reject(new Error('offline (forced)'));
     return fetch(url, opts);
+  }
+
+  // ---- music ----
+  var soundHint = document.getElementById('sound-hint');
+  function applyAudio() {
+    if (!audio) return;
+    audio.setEnabled(!!settings.global.music_enabled);
+    audio.setVolume(settings.global.music_volume / 100);
+    audio.setSource(settings.global.music_source);
+    audio.setStation(settings.global.music_station);
+    audio.setChristmasSource(settings.global.christmas_source);
+    audio.setLevels(settings.global.station_levels);
+  }
+  function updateSoundHint() {
+    if (soundHint) soundHint.hidden = !(audio && audio.available && audio.needsGesture && settings.global.music_enabled);
+  }
+  function initAudio() {
+    if (params.get('music') === '0') return;
+    try {
+      // Web Audio output is silent on LG TVs (webOS): there it is never used, not even for the visualizer tap.
+      var isTV = /web0s|webos|netcast|smarttv|tizen|hbbtv/i.test(navigator.userAgent || '');
+      audio = E.audio.createEngine({ analyser: !isTV, onStatus: function () { updateSoundHint(); if (settingsOpen) renderCredit(); },
+        source: settings.global.music_source, station: settings.global.music_station, christmasSource: settings.global.christmas_source });
+      applyAudio();
+      if (audio.init()) { audio.start(); updateSoundHint(); } else audio = null;
+    } catch (e) { audio = null; if (window.console) console.warn('audio disabled:', e); }
+  }
+
+  function renderCredit() {
+    var el = document.getElementById('s-credit');
+    if (el) var kiss = settings.global.music_source === 'stream' && settings.global.music_station === 'kissfm';
+    var ver = document.getElementById('version'), v = ver ? ver.textContent : '';
+    el.textContent = (kiss ? 'Radio: Kiss FM España (kissfm.es)' : 'Radio: SomaFM (somafm.com)') + (audio ? '  ·  ' + audio.describe() : '') + (v ? '  ·  ' + v : '');
+  }
+
+  // Version line: the build injects it into index.html. Opened directly for dev, the placeholder is still there:
+  // read it from appinfo.json instead (single source of truth).
+  function fillVersion() {
+    var el = document.getElementById('version');
+    if (!el || el.textContent.indexOf('{{') < 0) return;
+    el.textContent = '';
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', 'appinfo.json', true);
+      x.onload = function () { try { el.textContent = 'v' + JSON.parse(x.responseText).version; } catch (e) { /* leave empty */ } renderCredit(); };
+      x.send(null);
+    } catch (e2) { /* leave empty */ }
   }
 
   // ---- overlay helpers ----
@@ -78,6 +125,7 @@
     var v = model.view(), body = document.getElementById('s-body');
     document.getElementById('s-title').textContent = v.title;
     document.getElementById('s-hint').textContent = v.hint;
+    renderCredit();
     body.textContent = '';
     if (v.mode === 'keyboard') {
       var t = document.createElement('div');
@@ -115,7 +163,10 @@
   }
 
   function openSettings() {
-    model = new E.settingsmodel.SettingsModel(settings, { onChange: function () { store.save(); } });
+    model = new E.settingsmodel.SettingsModel(settings, {
+      onChange: function () { store.save(); applyAudio(); updateSoundHint(); },
+      getPin: function () { return scheduler.pinned; }, setPin: function (on) { scheduler.setPin(on); }
+    });
     settingsOpen = true;
     settingsEl.hidden = false;
     hint.hidden = true;
@@ -129,6 +180,7 @@
 
   // ---- keys ----
   function onKey(e) {
+    if (audio && audio.needsGesture) audio.unlock(); // browsers start audio only after a key press
     var name = E.keys.keyName(e);
     if (settingsOpen) {
       if (model.isKeyboard()) {
@@ -140,7 +192,7 @@
       var fx = model.handleKey(name);
       if (fx && fx.type === 'close') closeSettings();
       else if (fx && fx.type === 'runNow') { closeSettings(); scheduler.runNow(fx.id); }
-      else renderSettings();
+      else { renderSettings(); if (fx && fx.toast) showToast(fx.toast); }
       return;
     }
     var action = E.keys.bannerAction(name);
@@ -149,7 +201,13 @@
     if (action === 'next') scheduler.skip();
     else if (action === 'prev') scheduler.prev();
     else if (action === 'togglePause') scheduler.togglePause();
+    else if (action === 'togglePin') scheduler.togglePin();
     else if (action === 'openSettings') openSettings();
+    else if (action === 'toggleMusic') {
+      settings.global.music_enabled = !settings.global.music_enabled;
+      store.save(); applyAudio(); updateSoundHint();
+      showToast(settings.global.music_enabled ? 'Música: encendida' : 'Música: apagada', scheduler.paused);
+    }
     else showHint();
   }
 
@@ -161,12 +219,13 @@
     var fb = renderer.fb;
     fb.clear(0);
     var ctx = E.context.createContext({
-      fb: fb, fonts: fonts, cfg: cfg, control: control, net: net, rng: rng,
+      fb: fb, fonts: fonts, cfg: cfg, control: control, net: net, rng: rng, audio: audio,
       present: function () { renderer.markDirty(); },
       name: E.catalog.byId(id).name.toUpperCase(),
       nowMs: function () { return Date.now() + timeOffset; }
     });
-    return widget.run(ctx);
+    var release = function () { if (audio) audio.setTrack(null); }; // back to the default track
+    return widget.run(ctx).then(release, function (err) { release(); throw err; });
   }
 
   function enabledIds() {
@@ -187,7 +246,13 @@
   function onEvent(type, data) {
     if (type === 'start') {
       var w = E.catalog.byId(data);
-      if (w && !settingsOpen) showToast(w.name, scheduler.paused);
+      if (w && !settingsOpen && data !== lastToastId) showToast(w.name, scheduler.paused); // a pinned re-run is not announced again
+      lastToastId = data;
+    } else if (type === 'pin') {
+      var pinEl = document.getElementById('pin'), cw = scheduler.current && E.catalog.byId(scheduler.current);
+      if (pinEl) pinEl.hidden = !data;
+      showToast(data ? 'Modo fijado: ' + (cw ? cw.name : 'actual') : 'Modo libre: sigue la rotación', scheduler.paused);
+      if (settingsOpen) renderSettings();
     } else if (type === 'gap') { renderer.fb.clear(0); renderer.markDirty(); }
     else if (type === 'pause') { if (data) showToast('Pausado  (Amarillo para continuar)', true, 'paused'); else { toast.hidden = true; } }
     else if (type === 'idle') idleScreen();
@@ -204,6 +269,8 @@
       runWidget: runWidget, onEvent: onEvent, rng: rng
     });
     renderer.start();
+    fillVersion();
+    initAudio();
     document.addEventListener('keydown', onKey);
     document.addEventListener('visibilitychange', function () {
       if (document.hidden && !scheduler.paused) { scheduler.pause(); pausedByVisibility = true; }
@@ -212,10 +279,10 @@
     var resizeTimer = null;
     window.addEventListener('resize', function () {
       clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(function () { renderer.layout(window.innerWidth, window.innerHeight); scheduler.skip(); }, 300);
+      resizeTimer = setTimeout(function () { renderer.fit(); scheduler.skip(); }, 300);
     });
     if (params.get('settings') === '1') openSettings();
-    window.__elmatrix = { scheduler: scheduler, renderer: renderer, model: function () { return model; } }; // test hook
+    window.__elmatrix = { scheduler: scheduler, renderer: renderer, audio: audio, model: function () { return model; } }; // test hook
     showHint();
     scheduler.start();
   }

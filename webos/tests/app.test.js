@@ -81,7 +81,7 @@ const press = (m, ...names) => names.map(n => m.handleKey(n));
 
 test('settings model: navigate, adjust number and select with left/right', () => {
   const { m, settings } = model();
-  press(m, 'right'); // on pause_seconds
+  press(m, 'down', 'right'); // row 0 is "Fijar modo actual"; row 1 is pause_seconds
   assert.strictEqual(settings.global.pause_seconds, 3);
   press(m, 'left', 'left', 'left');
   assert.strictEqual(settings.global.pause_seconds, 0);
@@ -95,7 +95,7 @@ test('settings model: navigate, adjust number and select with left/right', () =>
 
 test('settings model: OK toggles a widget, right opens its options, back returns', () => {
   const { m, settings, saved } = model();
-  press(m, 'down', 'down'); // first widget row (phrases)
+  for (let i = 0; i < 10 && m.view().rows[m.view().cursor].label !== 'Frases positivas'; i++) m.handleKey('down'); // first widget row
   assert.strictEqual(m.view().rows[m.view().cursor].label, 'Frases positivas');
   press(m, 'ok');
   assert.strictEqual(settings.widgets.phrases.enabled, false);

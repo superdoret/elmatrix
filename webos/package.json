@@ -1,6 +1,6 @@
 {
   "name": "elmatrix-webos",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "eLMaTrIx LED banner for LG webOS TV (no runtime dependencies)",
   "scripts": {
@@ -8,7 +8,8 @@
     "icons": "node tools/make-icons.js",
     "fallback-font": "node tools/gen-fallback-font.js",
     "build": "node tools/build.js",
-    "package": "npm run build && echo 'Now run: ares-package dist'"
+    "package": "npm run build && echo 'Now run: ares-package dist'",
+    "render-music": "node tools/render-music.js"
   },
   "devDependencies": {
     "@babel/core": "^7.29.13",

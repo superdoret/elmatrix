@@ -15,9 +15,9 @@ test('defaults come from the catalog', () => {
   assert.deepStrictEqual(d.widgets.worldclock.config.zones[0], 'Barcelona|Europe/Madrid');
 });
 
-test('widget ids match src/catalog.py ids', () => {
+test('widget ids: the catalog.py ones plus the new modes', () => {
   assert.deepStrictEqual(C.WIDGETS.map(w => w.id).sort(),
-    ['clock', 'countdown', 'forecast', 'phrases', 'pixelart', 'rates', 'sports', 'word', 'worldclock']);
+    ['aquarium', 'clock', 'countdown', 'fireplace', 'fireworks', 'forecast', 'life', 'matrixrain', 'phrases', 'pixelart', 'plasma', 'rates', 'sports', 'starfield', 'visualizer', 'word', 'worldclock']);
 });
 
 test('merge ignores garbage and keeps valid values', () => {

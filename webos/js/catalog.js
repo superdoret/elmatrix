@@ -2,6 +2,7 @@
 (function (g) {
   'use strict';
   var E = g.ELM = g.ELM || {};
+  var STATIONS = E.stations || require('./music/stations.js');
 
   function opts() {
     var out = [];
@@ -60,20 +61,44 @@
     { id: 'sports', name: 'Deportes', description: 'Último resultado y próximo partido de un equipo.', category: 'Información', network: true, def_enabled: true,
       fields: [
         { key: 'team', label: 'Equipo', type: 'text', def: 'Barcelona', presets: TEAM_PRESETS },
-        { key: 'api_key', label: 'Clave de API', type: 'text', def: '3', help: 'Clave de TheSportsDB (la gratuita es 3).' },
+        { key: 'api_key', label: 'Clave de API', type: 'text', def: '123', help: 'Clave de TheSportsDB (la gratuita actual es 123).' },
         duration(12)
       ] },
-    { id: 'pixelart', name: 'Pixel art', description: 'Escena de día y noche o un Snake que juega solo.', category: 'Entretenimiento', network: false, def_enabled: true,
+    { id: 'pixelart', name: 'Pixel art', description: 'Escena de día y noche, Navidad o un Snake que juega solo.', category: 'Entretenimiento', network: false, def_enabled: true,
       fields: [
-        { key: 'style', label: 'Estilo', type: 'select', def: 'random', options: opts(['scene', 'Escena'], ['snake', 'Snake'], ['random', 'Al azar']) },
+        { key: 'style', label: 'Estilo', type: 'select', def: 'random', options: opts(['scene', 'Escena'], ['snake', 'Snake'], ['navidad', 'Navidad'], ['random', 'Al azar']) },
         { key: 'show_clock', label: 'Mostrar hora', type: 'bool', def: true },
         duration(20)
-      ] }
+      ] },
+
+    { id: 'matrixrain', name: 'Lluvia Matrix', description: 'Columnas de caracteres verdes cayendo, como en Matrix.', category: 'Entretenimiento', network: false, def_enabled: true,
+      fields: [duration(20, 5, 120)] },
+    { id: 'fireplace', name: 'Chimenea', description: 'Una chimenea con fuego, troncos y brasas.', category: 'Entretenimiento', network: false, def_enabled: true,
+      fields: [duration(25, 5, 180)] },
+    { id: 'aquarium', name: 'Acuario', description: 'Peces de píxeles nadando entre burbujas y algas.', category: 'Entretenimiento', network: false, def_enabled: true,
+      fields: [duration(25, 5, 180)] },
+    { id: 'fireworks', name: 'Fuegos artificiales', description: 'Cohetes y explosiones de partículas sobre una ciudad.', category: 'Entretenimiento', network: false, def_enabled: true,
+      fields: [duration(20, 5, 120)] },
+    { id: 'plasma', name: 'Plasma', description: 'Campo de colores tipo plasma clásico.', category: 'Entretenimiento', network: false, def_enabled: true,
+      fields: [duration(20, 5, 120)] },
+    { id: 'life', name: 'Juego de la vida', description: 'Autómata de Conway que se reinicia solo al estancarse.', category: 'Entretenimiento', network: false, def_enabled: true,
+      fields: [duration(30, 5, 180)] },
+    { id: 'starfield', name: 'Estrellas', description: 'Viaje a través de un campo de estrellas.', category: 'Entretenimiento', network: false, def_enabled: true,
+      fields: [duration(20, 5, 120)] },
+    { id: 'visualizer', name: 'Visualizador de música', description: 'Barras de espectro que siguen la música (simuladas si no hay sonido).', category: 'Entretenimiento', network: false, def_enabled: true,
+      fields: [duration(25, 5, 180)] }
   ];
 
   var GLOBAL_FIELDS = [
     { key: 'pause_seconds', label: 'Pausa entre widgets (segundos)', type: 'number', def: 2, min: 0, max: 30, step: 1 },
-    { key: 'order', label: 'Orden', type: 'select', def: 'shuffle', options: opts(['shuffle', 'Aleatorio'], ['sequence', 'En secuencia']) }
+    { key: 'order', label: 'Orden', type: 'select', def: 'shuffle', options: opts(['shuffle', 'Aleatorio'], ['sequence', 'En secuencia']) },
+    { key: 'music_enabled', label: 'Música de fondo', type: 'bool', def: true },
+    { key: 'music_volume', label: 'Volumen de la música (%)', type: 'number', def: 35, min: 0, max: 100, step: 5 },
+    { key: 'music_source', label: 'Fuente de la música', type: 'select', def: 'stream', options: opts(['stream', 'Radio en línea'], ['incluida', 'Música incluida (sin internet)']) },
+    { key: 'music_station', label: 'Emisora ambiente', type: 'select', def: 'dronezone',
+      options: STATIONS.ofKind('ambient').map(function (s) { return { value: s.id, label: s.label }; }) },
+    { key: 'christmas_source', label: 'Música en Navidad', type: 'select', def: 'carols',
+      options: opts(['carols', 'Villancicos (incluidos)'], ['radio', 'Radio: Christmas Lounge (lounge navideño)']) }
   ];
 
   function byId(id) {

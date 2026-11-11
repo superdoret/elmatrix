@@ -9,20 +9,27 @@
 </head>
 <body>
   <canvas id="matrix" aria-label="Pantalla de LEDs"></canvas>
+  <!-- Bottom line: credit on the left, version on the right. {{VERSION}} is replaced by the build from appinfo.json
+       (opened directly for dev, app.js reads appinfo.json instead). Not focusable, ignores input. -->
+  <div id="credit" class="byline"><span class="by-left">Desarrollado por Matias Toro</span><span id="pin" class="by-mid" hidden>Fijo</span><span id="version" class="by-right">v{{VERSION}}</span></div>
 
   <div id="toast" class="toast" hidden></div>
   <div id="hint" class="hint" hidden>
     <span><b>&larr; &rarr;</b> Cambiar widget</span>
     <span><b>OK</b> Ajustes</span>
     <span class="k yellow">Amarillo</span><span>Pausa</span>
+    <span class="k green">Verde</span><span>Fijar modo</span>
     <span class="k red">Rojo</span><span>Ajustes</span>
   </div>
+
+  <div id="sound-hint" class="hint sound" hidden>Pulsa OK para activar el sonido</div>
 
   <div id="settings" class="settings" hidden>
     <div class="panel">
       <h1 id="s-title"></h1>
       <div id="s-body"></div>
       <p id="s-hint" class="s-hint"></p>
+      <p id="s-credit" class="s-hint credit"></p>
     </div>
   </div>
 
@@ -46,6 +53,9 @@
   </script>
   <script src="js/compat.js"></script>
   <script src="js/fallbackfont.js"></script>
+  <script src="js/music/stations.js"></script>
+  <script src="js/music/stream.js"></script>
+  <script src="js/audio.js"></script>
   <script src="js/bdf.js"></script>
   <script src="js/framebuffer.js"></script>
   <script src="js/textlayout.js"></script>
@@ -70,6 +80,14 @@
   <script src="js/widgets/phrases.js"></script>
   <script src="js/widgets/word.js"></script>
   <script src="js/widgets/pixelart.js"></script>
+  <script src="js/widgets/matrixrain.js"></script>
+  <script src="js/widgets/fireplace.js"></script>
+  <script src="js/widgets/aquarium.js"></script>
+  <script src="js/widgets/fireworks.js"></script>
+  <script src="js/widgets/plasma.js"></script>
+  <script src="js/widgets/life.js"></script>
+  <script src="js/widgets/starfield.js"></script>
+  <script src="js/widgets/visualizer.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

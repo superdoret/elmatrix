@@ -52,10 +52,24 @@
     var cat = catalog();
     var s = { global: {}, widgets: {} };
     cat.GLOBAL_FIELDS.forEach(function (f) { s.global[f.key] = f.def; });
+    s.global.station_levels = {};
     cat.WIDGETS.forEach(function (w) {
       s.widgets[w.id] = { enabled: !!w.def_enabled, config: defaultConfig(w) };
     });
     return s;
+  }
+
+  // Per-station user levels (percent 50..100 in steps of 5); unknown ids and junk are dropped.
+  function coerceLevels(raw) {
+    var out = {}, ST = E.stations || require('./music/stations.js'), valid = ST.levelKeys();
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+    valid.forEach(function (k) {
+      if (!(k in raw)) return;
+      var n = Number(raw[k]);
+      if (!isFinite(n)) return;
+      out[k] = Math.max(50, Math.min(100, Math.round(n / 5) * 5));
+    });
+    return out;
   }
 
   function isObj(v) { return v && typeof v === 'object' && !Array.isArray(v); }
@@ -67,6 +81,7 @@
     var out = defaults();
     if (!isObj(raw)) return out;
     if (isObj(raw.global)) {
+      out.global.station_levels = coerceLevels(raw.global.station_levels);
       cat.GLOBAL_FIELDS.forEach(function (f) {
         if (f.key in raw.global) out.global[f.key] = coerceField(f, raw.global[f.key]);
       });
@@ -107,7 +122,7 @@
   };
   Store.prototype.reset = function () { this.data = defaults(); this.save(); };
 
-  var api = { STORAGE_KEY: STORAGE_KEY, coerceField: coerceField, defaults: defaults, merge: merge, Store: Store, defaultConfig: defaultConfig };
+  var api = { coerceLevels: coerceLevels, STORAGE_KEY: STORAGE_KEY, coerceField: coerceField, defaults: defaults, merge: merge, Store: Store, defaultConfig: defaultConfig };
   E.settings = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : global);

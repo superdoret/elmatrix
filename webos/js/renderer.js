@@ -5,6 +5,7 @@
   var E = g.ELM = g.ELM || {};
 
   var TARGET_COLS = 192;
+  var STRIP = 0.065; // bottom strip of the window reserved for the credit line (never drawn by widgets)
 
   /* Grid from window size: ~192 columns, integer cell size (>= 4 px). */
   function computeGrid(width, height, targetCols) {
@@ -34,10 +35,13 @@
     this.targetCols = targetCols || TARGET_COLS;
     this.g2d = canvas.getContext('2d');
     this.fb = new FB.Framebuffer(1, 1);
-    this.layout(window.innerWidth, window.innerHeight);
+    this.fit();
     this.running = false;
     this.lastMs = 0;
   }
+
+  // Lay out the LED grid in the window minus the credit strip.
+  Renderer.prototype.fit = function () { this.layout(window.innerWidth, Math.floor(window.innerHeight * (1 - STRIP))); };
 
   Renderer.prototype.layout = function (width, height) {
     var grid = computeGrid(width, height, this.targetCols);
@@ -100,7 +104,7 @@
     requestAnimationFrame(frame);
   };
 
-  var api = { computeGrid: computeGrid, buildMasks: buildMasks, Renderer: Renderer, TARGET_COLS: TARGET_COLS };
+  var api = { computeGrid: computeGrid, buildMasks: buildMasks, Renderer: Renderer, TARGET_COLS: TARGET_COLS, STRIP: STRIP };
   E.renderer = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : global);

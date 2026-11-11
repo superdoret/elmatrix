@@ -51,3 +51,13 @@ test('no external URLs are loaded by the page (offline-safe, no CDN)', () => {
 test('font license files are shipped next to the BDF files', () => {
   ['README', 'README.md', 'AUTHORS'].forEach(f => assert.ok(fs.existsSync(path.join(root, 'assets/fonts', f)), f));
 });
+
+test('versions: appinfo.json is the source of truth and package.json / lock stay in sync', () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')), lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
+  assert.strictEqual(pkg.version, info.version);
+  assert.strictEqual(lock.version, info.version);
+  assert.strictEqual(lock.packages[''].version, info.version);
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  assert.ok(html.includes('{{VERSION}}'), 'source index.html keeps the placeholder (app.js reads appinfo.json in dev)');
+  assert.ok(html.includes('Desarrollado por Matias Toro'));
+});
