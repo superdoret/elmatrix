@@ -63,7 +63,7 @@
     this.el = el;
     el.crossOrigin = 'anonymous';
     el.preload = 'none';
-    if (this.d.loop) el.loop = true;
+    el.loop = !!this.d.loop; // the element is reused: always set it explicitly
     if (this.d.onElement) { try { this.d.onElement(el); } catch (e3) { /* routing is optional */ } }
     this.listeners = {
       playing: function () { self._onPlaying(); },

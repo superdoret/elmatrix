@@ -10,7 +10,7 @@ function engine(extra) {
   FakeAudio.all.length = 0;
   const clock = new FakeClock(), online = { v: true }, probes = [];
   const eng = A.createEngine(Object.assign({
-    timers: clock, source: 'stream', createElement: () => new FakeAudio(), isOnline: () => online.v, analyser: false,
+    timers: clock, source: 'stream', station: 'dronezone', reuseElement: false, createElement: () => new FakeAudio(), isOnline: () => online.v, analyser: false,
     probe: (url, cb) => probes.push({ url, cb })
   }, extra));
   return { eng, clock, online, probes, els: FakeAudio.all, live: () => FakeAudio.all.filter(e => !e.paused) };

@@ -60,15 +60,7 @@
 
   // ---- music ----
   var soundHint = document.getElementById('sound-hint');
-  function applyAudio() {
-    if (!audio) return;
-    audio.setEnabled(!!settings.global.music_enabled);
-    audio.setVolume(settings.global.music_volume / 100);
-    audio.setSource(settings.global.music_source);
-    audio.setStation(settings.global.music_station);
-    audio.setChristmasSource(settings.global.christmas_source);
-    audio.setLevels(settings.global.station_levels);
-  }
+  function applyAudio() { if (audio) E.audio.applySettings(audio, settings.global); }
   function updateSoundHint() {
     if (soundHint) soundHint.hidden = !(audio && audio.available && audio.needsGesture && settings.global.music_enabled);
   }

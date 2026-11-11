@@ -10,7 +10,7 @@ const { FakeClock, FakeAudio } = require('./fakeclock.js');
 function engine(extra) {
   FakeAudio.all.length = 0;
   const clock = new FakeClock();
-  const eng = A.createEngine(Object.assign({ timers: clock, source: 'stream', createElement: () => new FakeAudio(), analyser: false, probe() {} }, extra));
+  const eng = A.createEngine(Object.assign({ timers: clock, source: 'stream', station: 'dronezone', reuseElement: false, createElement: () => new FakeAudio(), analyser: false, probe() {} }, extra));
   eng.init();
   return { eng, clock, els: FakeAudio.all };
 }
@@ -112,7 +112,7 @@ function model(patch) {
 }
 
 test('settings row "Nivel de esta estación": 50..100 in 5 % steps, per selected station, toast with the percentage', () => {
-  const { m, settings, goto, changes } = model();
+  const { m, settings, goto, changes } = model({ music_station: 'dronezone' });
   goto('Nivel de esta estación');
   assert.strictEqual(m.view().rows[m.view().cursor].value, '100%');
   assert.deepStrictEqual(m.handleKey('left'), { type: 'redraw', toast: 'Nivel: 95%' });

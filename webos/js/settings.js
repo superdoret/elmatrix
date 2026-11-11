@@ -3,6 +3,7 @@
   'use strict';
   var E = g.ELM = g.ELM || {};
   var STORAGE_KEY = 'elmatrix.settings.v1';
+  var SCHEMA = 2; // 2: default background station is Kiss FM; older saved data never recorded an explicit station choice
 
   function catalog() { return E.catalog || require('./catalog.js'); }
 
@@ -113,11 +114,15 @@
   Store.prototype.load = function () {
     try {
       var txt = this.storage && this.storage.getItem(STORAGE_KEY);
-      return merge(txt ? JSON.parse(txt) : null);
+      var raw = txt ? JSON.parse(txt) : null;
+      // Migration: before schema 2 the whole settings object (including the then-default station) was persisted, so a stored
+      // 'dronezone' cannot be told from an explicit pick. Treat it as unset so such users get the new default (Kiss FM).
+      if (raw && typeof raw === 'object' && !(raw._v >= SCHEMA) && raw.global && raw.global.music_station === 'dronezone') delete raw.global.music_station;
+      return merge(raw);
     } catch (e) { return defaults(); }
   };
   Store.prototype.save = function () {
-    try { if (!this.storage) return false; this.storage.setItem(STORAGE_KEY, JSON.stringify(this.data)); return true; }
+    try { if (!this.storage) return false; this.storage.setItem(STORAGE_KEY, JSON.stringify(Object.assign({ _v: SCHEMA }, this.data))); return true; }
     catch (e) { return false; }
   };
   Store.prototype.reset = function () { this.data = defaults(); this.save(); };

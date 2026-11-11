@@ -17,7 +17,7 @@ test('defaults come from the catalog', () => {
 
 test('widget ids: the catalog.py ones plus the new modes', () => {
   assert.deepStrictEqual(C.WIDGETS.map(w => w.id).sort(),
-    ['aquarium', 'clock', 'countdown', 'fireplace', 'fireworks', 'forecast', 'life', 'matrixrain', 'navidad', 'phrases', 'pixelart', 'plasma', 'rates', 'sports', 'starfield', 'visualizer', 'word', 'worldclock']);
+    ['aquarium', 'clock', 'countdown', 'fireplace', 'fireworks', 'forecast', 'life', 'matrixrain', 'navidad', 'phrases', 'pixelart', 'plasma', 'rates', 'sports', 'starfield', 'tetris', 'visualizer', 'word', 'worldclock']);
 });
 
 test('merge ignores garbage and keeps valid values', () => {

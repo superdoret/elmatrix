@@ -9,9 +9,9 @@ const { FakeClock, FakeAudio } = require('./fakeclock.js');
 test('stations: single table with only the verified SomaFM URLs and sane defaults', () => {
   assert.deepStrictEqual(ST.STATIONS.map(s => s.id), ['dronezone', 'deepspaceone', 'spacestation', 'kissfm', 'christmas', 'xmasinfrisko']);
   ST.STATIONS.filter(s => s.id !== 'kissfm').forEach(s => { assert.match(s.url, /^https:\/\/ice1\.somafm\.com\/[a-z]+-128-mp3$/); assert.ok(s.label && ['ambient', 'christmas'].includes(s.kind)); });
-  assert.strictEqual(ST.forTrack('ambient').id, 'dronezone');
+  assert.strictEqual(ST.forTrack('ambient').id, 'kissfm', 'Kiss FM is the default background radio');
   assert.strictEqual(ST.forTrack('ambient', 'spacestation').id, 'spacestation');
-  assert.strictEqual(ST.forTrack('ambient', 'christmas').id, 'dronezone', 'a christmas station is not an ambient choice');
+  assert.strictEqual(ST.forTrack('ambient', 'christmas').id, 'kissfm', 'a christmas station is not an ambient choice');
   assert.strictEqual(ST.forTrack('christmas').id, 'christmas');
   assert.strictEqual(ST.forTrack('christmas', 'xmasinfrisko').id, 'xmasinfrisko');
 });
@@ -168,13 +168,13 @@ test('a throwing onChange callback never breaks the state machine', () => {
 test('settings: music source/station/christmas options and defaults', () => {
   const S = require('../js/settings.js'), C = require('../js/catalog.js');
   const d = S.defaults().global;
-  assert.deepStrictEqual([d.music_source, d.music_station, d.christmas_source], ['stream', 'dronezone', 'carols']);
+  assert.deepStrictEqual([d.music_source, d.music_station, d.christmas_source], ['stream', 'kissfm', 'carols']);
   const station = C.GLOBAL_FIELDS.find(f => f.key === 'music_station');
   assert.deepStrictEqual(station.options.map(o => o.value), ['dronezone', 'deepspaceone', 'spacestation', 'kissfm']);
   assert.ok(/^SomaFM: /.test(station.options[0].label));
   assert.ok(/Kiss FM España/.test(station.options[3].label) && /comercial/.test(station.options[3].label) && /anuncios/.test(station.options[3].label));
   assert.strictEqual(S.merge({ global: { music_station: 'kissfm' } }).global.music_station, 'kissfm', 'choice persists');
-  assert.strictEqual(S.merge({ global: { music_station: 'nope' } }).global.music_station, 'dronezone', 'unknown stored id -> default');
+  assert.strictEqual(S.merge({ global: { music_station: 'nope' } }).global.music_station, 'kissfm', 'unknown stored id -> default');
   const xmas = C.GLOBAL_FIELDS.find(f => f.key === 'christmas_source');
   assert.ok(/Christmas Lounge/.test(xmas.options[1].label) && /lounge/.test(xmas.options[1].label), 'radio option labelled honestly');
   assert.strictEqual(xmas.options[0].label, 'Villancicos (incluidos)');
@@ -182,7 +182,7 @@ test('settings: music source/station/christmas options and defaults', () => {
   assert.deepStrictEqual(src.options.map(o => o.value), ['stream', 'incluida']);
   assert.ok(/incluida/i.test(src.options[1].label) && /sin internet/.test(src.options[1].label));
   const m = S.merge({ global: { music_source: 'synth', music_station: 'christmas', christmas_source: 'radio' } }).global;
-  assert.deepStrictEqual([m.music_source, m.music_station, m.christmas_source], ['stream', 'dronezone', 'radio']);
+  assert.deepStrictEqual([m.music_source, m.music_station, m.christmas_source], ['stream', 'kissfm', 'radio']);
 });
 
 test('kiss fm station: plain URL (no signed token), selectable as ambient, unknown ids fall back to the default', () => {
@@ -192,8 +192,8 @@ test('kiss fm station: plain URL (no signed token), selectable as ambient, unkno
   assert.strictEqual(k.kind, 'ambient');
   assert.strictEqual(ST.forTrack('ambient', 'kissfm').id, 'kissfm');
   assert.strictEqual(ST.forTrack('christmas', 'kissfm').id, 'christmas', 'not a christmas station');
-  assert.strictEqual(ST.forTrack('ambient', 'does-not-exist').id, 'dronezone');
-  assert.strictEqual(ST.DEFAULTS.ambient, 'dronezone', 'default stays the ambient station');
+  assert.strictEqual(ST.forTrack('ambient', 'does-not-exist').id, 'kissfm');
+  assert.strictEqual(ST.DEFAULTS.ambient, 'kissfm', 'Kiss FM España is the default background station');
 });
 
 test('every (re)connect assigns src again so redirects/expiring tokens are re-resolved', () => {
@@ -207,4 +207,20 @@ test('every (re)connect assigns src again so redirects/expiring tokens are re-re
   // a stall-triggered reconnect also re-sets src
   p.element().emit('playing'); p.element().emit('waiting'); clock.advance(SP.STALL_TIMEOUT); clock.advance(2000);
   assert.strictEqual(FakeAudio.srcLog.filter(([, v]) => v === ST.byId('kissfm').url).length, 4);
+});
+
+const S = require('../js/settings.js');
+test('migration: a pre-schema-2 stored "dronezone" (just the old default) becomes the new default; explicit choices survive', () => {
+  const mk = txt => ({ getItem: () => txt, setItem(k, v) { this.saved = v; } });
+  const old = new S.Store(mk(JSON.stringify({ global: { music_station: 'dronezone', music_volume: 50 } })));
+  assert.strictEqual(old.data.global.music_station, 'kissfm');
+  assert.strictEqual(old.data.global.music_volume, 50, 'other values are kept');
+  assert.strictEqual(new S.Store(mk(JSON.stringify({ global: { music_station: 'spacestation' } }))).data.global.music_station, 'spacestation');
+  assert.strictEqual(new S.Store(mk(JSON.stringify({ global: { music_station: 'kissfm' } }))).data.global.music_station, 'kissfm');
+  // saved with the schema marker: an explicit dronezone is respected from now on
+  const st = mk(null), a = new S.Store(st);
+  a.data.global.music_station = 'dronezone'; a.save();
+  assert.strictEqual(JSON.parse(st.saved)._v, 2);
+  assert.strictEqual(new S.Store(mk(st.saved)).data.global.music_station, 'dronezone');
+  assert.strictEqual(new S.Store(mk(null)).data.global.music_station, 'kissfm', 'first run');
 });
