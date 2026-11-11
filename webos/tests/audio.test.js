@@ -51,15 +51,15 @@ test('source "incluida": plays the bundled ambient MP3 on a looping element with
   assert.strictEqual(t.probes.length, 0);
 });
 
-test('radio source: connects to the station, loop is off, volume follows fade and master volume', () => {
+test('radio source: connects to the station, loop is off, volume follows fade, SomaFM trim and master volume', () => {
   const t = engine();
   t.eng.init(); t.eng.start();
   assert.strictEqual(t.els[0].src, ST.byId('dronezone').url);
   assert.ok(!t.els[0].loop);
   t.els[0].emit('playing'); t.clock.advance(3000);
-  assert.ok(Math.abs(t.els[0].volume - 0.35) < 1e-6);
-  t.eng.setVolume(0.8); assert.ok(Math.abs(t.els[0].volume - 0.8) < 1e-6);
-  t.eng.setVolume(5); assert.strictEqual(t.els[0].volume, 1);
+  assert.ok(Math.abs(t.els[0].volume - 0.35 * 0.7) < 1e-6, 'trimmed: ' + t.els[0].volume);
+  t.eng.setVolume(0.8); assert.ok(Math.abs(t.els[0].volume - 0.8 * 0.7) < 1e-6);
+  t.eng.setVolume(5); assert.ok(Math.abs(t.els[0].volume - 0.7) < 1e-6);
   t.eng.setVolume(-1); assert.strictEqual(t.els[0].volume, 0);
   assert.strictEqual(t.eng.describe(), 'radio en línea');
 });

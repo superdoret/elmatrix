@@ -37,7 +37,7 @@
     var eng = {
       available: false, enabled: true, volume: 0.35, needsGesture: false, defaultTrack: 'ambient', currentTrack: null, error: null,
       source: opts.source || 'stream', station: opts.station || 'dronezone', christmasSource: opts.christmasSource || 'carols',
-      streamState: 'idle', streamBlocked: false, ctxSuspended: false, role: 'primary'
+      streamState: 'idle', streamBlocked: false, ctxSuspended: false, role: 'primary', levels: {}
     };
 
     function status() { if (opts.onStatus) { try { opts.onStatus(eng); } catch (e) { /* ignore */ } } }
@@ -58,14 +58,19 @@
     /* What to play for a track: {primary:{kind,url,loop}, fallback:{...}|null}. */
     function planFor(name) {
       ST = ST || E.stations;
-      var file = { kind: 'file', url: ST.fileFor(name), loop: true };
+      var file = { kind: 'file', url: ST.fileFor(name), loop: true, key: 'bundled', trim: ST.fileTrim(name) };
       var radio = name === 'christmas' ? eng.christmasSource === 'radio' : eng.source === 'stream';
       if (!radio) return { primary: file, fallback: null };
-      return { primary: { kind: 'stream', url: ST.forTrack(name, eng.station).url, loop: false }, fallback: file };
+      var st = ST.forTrack(name, eng.station);
+      return { primary: { kind: 'stream', url: st.url, loop: false, key: st.id, trim: st.trim }, fallback: file };
     }
 
     // ---- volume: element.volume only (level = fade 0..1 times the master volume) ----
-    function target(slot) { return slot.level * (eng.enabled ? eng.volume : 0); }
+    // element volume = fade x user volume x station trim x per-station user level, never above 1.0
+    function userLevel(key) { var v = eng.levels[key]; return typeof v === 'number' ? Math.max(0.05, Math.min(1, v / 100)) : 1; }
+    function target(slot) {
+      return Math.min(1, slot.level * (eng.enabled ? eng.volume : 0) * (slot.trim || 1) * userLevel(slot.key));
+    }
     function applyVolume(slot) {
       var el = slot && slot.player && slot.player.element();
       if (el) { try { el.volume = Math.max(0, Math.min(1, target(slot))); } catch (e) { /* ignore */ } }
@@ -97,7 +102,7 @@
 
     // ---- players ----
     function startPlayer(slot, spec, maxFailures) {
-      slot.kind = spec.kind;
+      slot.kind = spec.kind; slot.key = spec.key; slot.trim = spec.trim;
       slot.player = new E.stream.StreamPlayer({
         url: spec.url, loop: spec.loop, maxFailures: maxFailures, createElement: createElement, timers: timers, isOnline: spec.kind === 'stream' ? isOnline : function () { return true; },
         onElement: function (el) { try { el.volume = Math.max(0, Math.min(1, target(slot))); } catch (e) { /* ignore */ } routeElement(el); },
@@ -227,6 +232,8 @@
     };
 
     eng.setVolume = function (v) { eng.volume = clamp01(v); if (cur) applyVolume(cur); };
+    /* Per-station user levels {id|'bundled': percent 50..100}; applied live. */
+    eng.setLevels = function (map) { eng.levels = map && typeof map === 'object' ? map : {}; if (cur) applyVolume(cur); };
 
     /* Key press: start playback if the browser blocked autoplay, resume the analyser context. */
     eng.unlock = function () {

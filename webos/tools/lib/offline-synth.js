@@ -7,6 +7,10 @@ const C = require(path.join(__dirname, '..', 'music', 'carols.js'));
 
 const SR = 32000;
 const TAU = Math.PI * 2;
+// Loudness: the bundled tracks must sit near the radio (Kiss FM measures about -15 LUFS), so they are rendered at about -16 LUFS.
+// LUFS ~ RMS dBFS for this material; the soft limiter (tanh, LIMIT) keeps true peaks under -1.5 dBFS after MP3 encoding.
+const DEFAULT_RMS_DB = -14.6;
+const LIMIT = 0.8;
 const TAIL = 7; // seconds of reverb tail folded back onto the start (seamless loop)
 
 /** Plan a track: sequential generator blocks until at least `minSeconds`. -> {blocks, total, kind} */
@@ -107,7 +111,7 @@ const REVERB = { ambient: { send: 0.55, fb: 0.86, wet: 1.0, echo: 0.22 }, christ
 /** Render a plan to mono Float32Array (length = round(total * sr)), loop-friendly, normalized to ~targetRmsDb. */
 function render(plan, opts) {
   opts = opts || {};
-  const sr = opts.sampleRate || SR, targetDb = opts.targetRmsDb === undefined ? -19 : opts.targetRmsDb, cfg = REVERB[plan.kind];
+  const sr = opts.sampleRate || SR, targetDb = opts.targetRmsDb === undefined ? DEFAULT_RMS_DB : opts.targetRmsDb, cfg = REVERB[plan.kind];
   const length = Math.round(plan.total * sr), full = length + TAIL * sr;
   const dry = new Float32Array(full);
   for (const { block, start } of plan.blocks) {
@@ -130,7 +134,7 @@ function render(plan, opts) {
   for (let i = 0; i < fade; i++) { const g = 0.5 - 0.5 * Math.cos(Math.PI * i / fade); out[i] *= g; out[length - 1 - i] *= g; }
   let sum = 0;
   for (let i = 0; i < length; i++) sum += out[i] * out[i];
-  const rms = Math.sqrt(sum / length) || 1, gain = Math.pow(10, targetDb / 20) / rms, limit = 0.9;
+  const rms = Math.sqrt(sum / length) || 1, gain = Math.pow(10, targetDb / 20) / rms, limit = LIMIT;
   for (let i = 0; i < length; i++) out[i] = limit * Math.tanh(out[i] * gain / limit);
   return out;
 }
@@ -144,4 +148,4 @@ function toWav16(samples, sr) {
   return data;
 }
 
-module.exports = { SR, TAIL, planTrack, render, toWav16, REVERB };
+module.exports = { SR, TAIL, DEFAULT_RMS_DB, LIMIT, planTrack, render, toWav16, REVERB };

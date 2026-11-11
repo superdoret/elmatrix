@@ -26,6 +26,8 @@
   function SettingsModel(settings, opts) {
     this.settings = settings;       // live settings object {global, widgets}
     this.onChange = (opts && opts.onChange) || function () {};
+    this.getPin = (opts && opts.getPin) || function () { return false; };   // session pin (not persisted)
+    this.setPin = (opts && opts.setPin) || function () {};
     this.stack = [{ type: 'main', cursor: 0 }];
   }
 
@@ -43,6 +45,25 @@
     }
   };
 
+  /* The music level row edits the station that is playing (or "bundled" for the included music). */
+  SettingsModel.prototype.levelKey = function () {
+    var g = this.settings.global;
+    return g.music_source === 'stream' ? g.music_station : 'bundled';
+  };
+  SettingsModel.prototype.levelPct = function () {
+    var v = this.settings.global.station_levels && this.settings.global.station_levels[this.levelKey()];
+    return typeof v === 'number' ? v : 100;
+  };
+  SettingsModel.prototype._setLevel = function (delta, wrap) {
+    var g = this.settings.global, cur = this.levelPct(), next = cur + delta;
+    if (next > 100) next = wrap ? 50 : 100;
+    if (next < 50) next = wrap ? 100 : 50;
+    g.station_levels = g.station_levels || {};
+    g.station_levels[this.levelKey()] = next;
+    this._changed();
+    return { type: 'redraw', toast: 'Nivel: ' + next + '%' };
+  };
+
   SettingsModel.prototype._store = function (row) {
     return row.scope === 'global' ? this.settings.global : this.settings.widgets[row.widgetId].config;
   };
@@ -50,7 +71,9 @@
   SettingsModel.prototype.rows = function (screen) {
     var cat = catalog(), self = this, rows = [];
     if (screen.type === 'main') {
+      rows.push({ kind: 'pin' });
       cat.GLOBAL_FIELDS.forEach(function (f) { rows.push({ kind: 'field', scope: 'global', field: f }); });
+      rows.push({ kind: 'level' });
       cat.WIDGETS.forEach(function (w) { rows.push({ kind: 'widget', widget: w }); });
       rows.push({ kind: 'action', action: 'reset', label: 'Restablecer valores' });
       rows.push({ kind: 'action', action: 'close', label: 'Cerrar' });
@@ -91,6 +114,10 @@
       } else if (row.kind === 'widget') {
         var st = self.settings.widgets[row.widget.id];
         o.label = row.widget.name; o.value = st.enabled ? 'Activado' : 'Desactivado'; o.on = st.enabled; o.more = true;
+      } else if (row.kind === 'level') {
+        o.label = 'Nivel de esta estación'; o.value = self.levelPct() + '%'; o.adjustable = true;
+      } else if (row.kind === 'pin') {
+        o.label = 'Fijar modo actual'; o.value = self.getPin() ? 'Sí' : 'No'; o.adjustable = true; o.on = self.getPin();
       } else if (row.kind === 'enabled') {
         o.label = 'Activado'; o.value = self.settings.widgets[row.widgetId].enabled ? 'Sí' : 'No';
         o.adjustable = true;
@@ -224,6 +251,10 @@
           var st = this._store(row);
           if (row.field.type === 'list' && dir > 0) return this._open(row);
           if (this._adjust(st, row.field, dir)) return { type: 'redraw' };
+        } else if (row.kind === 'level') {
+          return this._setLevel(dir * 5, false);
+        } else if (row.kind === 'pin') {
+          this.setPin(!this.getPin()); return { type: 'redraw' };
         } else if (row.kind === 'enabled') {
           var ws = this.settings.widgets[row.widgetId]; ws.enabled = !ws.enabled; this._changed(); return { type: 'redraw' };
         } else if (row.kind === 'widget' && dir > 0) {
@@ -253,6 +284,8 @@
 
   SettingsModel.prototype._ok = function (row, s) {
     var self = this;
+    if (row.kind === 'pin') { this.setPin(!this.getPin()); return { type: 'redraw' }; }
+    if (row.kind === 'level') return this._setLevel(5, true);
     if (row.kind === 'widget') {
       var ws = this.settings.widgets[row.widget.id]; ws.enabled = !ws.enabled; this._changed(); return { type: 'redraw' };
     }

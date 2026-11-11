@@ -19,8 +19,8 @@ const peak = a => { let p = 0; for (let i = 0; i < a.length; i++) p = Math.max(p
     assert.notStrictEqual(hash(a), hash(S.render(S.planTrack(kind, 8, 40), { sampleRate: SR })), 'different seed -> different music');
     assert.strictEqual(a.length, Math.round(plan.total * SR));
     const db = 20 * Math.log10(rms(a));
-    assert.ok(db > -22 && db < -16, 'RMS ' + db.toFixed(1) + ' dBFS near the -19 target');
-    assert.ok(peak(a) <= 0.9 + 1e-6, 'soft limiter keeps the peak below 0.9: ' + peak(a));
+    assert.ok(Math.abs(db - S.DEFAULT_RMS_DB) < 2.5, 'RMS ' + db.toFixed(1) + ' dBFS near the ' + S.DEFAULT_RMS_DB + ' target (about -16 LUFS)');
+    assert.ok(peak(a) <= S.LIMIT + 1e-6, 'soft limiter keeps the peak below ' + S.LIMIT + ': ' + peak(a));
     assert.ok(a.every(Number.isFinite));
   });
   test('render ' + kind + ': loop seam is silent and click free (fade in/out, folded reverb tail)', () => {
@@ -68,4 +68,17 @@ test('committed MP3s exist, are small, and look like MP3 (ID3/frame sync)', () =
     assert.ok(b.toString('latin1', 0, 3) === 'ID3' || (b[0] === 0xff && (b[1] & 0xe0) === 0xe0), 'mp3 header');
   });
   assert.ok(total < 6e6, 'total ' + total);
+});
+
+test('committed MP3 loudness (ffmpeg ebur128): about -16 LUFS integrated, true peak <= -1.5 dBFS', t => {
+  const { spawnSync } = require('child_process');
+  if (spawnSync('ffmpeg', ['-version']).status !== 0) { t.skip('ffmpeg not installed'); return; }
+  ['ambient', 'christmas'].forEach(n => {
+    const f = path.join(__dirname, '..', 'assets', 'music', n + '.mp3');
+    const out = spawnSync('ffmpeg', ['-hide_banner', '-nostats', '-i', f, '-af', 'ebur128=peak=true', '-f', 'null', '-'], { encoding: 'utf8' }).stderr;
+    const sum = out.slice(out.lastIndexOf('Summary:'));
+    const lufs = parseFloat(/I:\s+(-?[\d.]+) LUFS/.exec(sum)[1]), pk = parseFloat(/Peak:\s+(-?[\d.]+) dBFS/.exec(sum)[1]);
+    assert.ok(lufs > -17 && lufs < -15, n + ' integrated ' + lufs + ' LUFS');
+    assert.ok(pk <= -1.5, n + ' true peak ' + pk + ' dBFS');
+  });
 });
