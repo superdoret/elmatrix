@@ -30,6 +30,11 @@
         { key: 'show_date', label: 'Mostrar fecha', type: 'bool', def: true },
         duration(10, 3, 120)
       ] },
+    { id: 'tetris', name: 'Reloj Tetris', description: 'La hora formada por piezas de Tetris que caen y se acomodan.', category: 'Reloj', network: false, def_enabled: true,
+      fields: [
+        { key: 'format24h', label: 'Formato 24 horas', type: 'bool', def: true },
+        duration(25, 5, 120)
+      ] },
     { id: 'worldclock', name: 'Reloj mundial', description: 'Hora actual en varias ciudades.', category: 'Reloj', network: false, def_enabled: true,
       fields: [
         { key: 'zones', label: 'Zonas horarias', type: 'list', def: ['Barcelona|Europe/Madrid', 'Rosario|America/Argentina/Cordoba', 'Tokyo|Asia/Tokyo'],
@@ -116,7 +121,7 @@
     { key: 'music_enabled', label: 'Música de fondo', type: 'bool', def: true },
     { key: 'music_volume', label: 'Volumen de la música (%)', type: 'number', def: 35, min: 0, max: 100, step: 5 },
     { key: 'music_source', label: 'Fuente de la música', type: 'select', def: 'stream', options: opts(['stream', 'Radio en línea'], ['incluida', 'Música incluida (sin internet)']) },
-    { key: 'music_station', label: 'Emisora ambiente', type: 'select', def: 'dronezone',
+    { key: 'music_station', label: 'Emisora de fondo', type: 'select', def: 'kissfm',
       options: STATIONS.ofKind('ambient').map(function (s) { return { value: s.id, label: s.label }; }) },
     { key: 'christmas_source', label: 'Música en Navidad', type: 'select', def: 'carols',
       options: opts(['carols', 'Villancicos (incluidos)'], ['radio', 'Radio: Christmas Lounge (lounge navideño)']) }

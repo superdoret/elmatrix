@@ -76,9 +76,15 @@ En el escritorio: flechas, Enter, Esc, y las letras `r`, `y`, `g`, `b` como tecl
 
 ## Widgets
 
-Reloj, Reloj mundial, Cuenta regresiva, Cotizaciones (CoinGecko + dolarapi.com), Pronóstico (Open-Meteo), Deportes (TheSportsDB), Frases positivas, Palabra y Pixel art (escena de día/noche, **Navidad** y Snake).
+Reloj, Reloj mundial, **Reloj Tetris**, Cuenta regresiva, Cotizaciones (CoinGecko + dolarapi.com), Pronóstico (Open-Meteo), Deportes (TheSportsDB), Frases positivas, Palabra y Pixel art (escena de día/noche, **Navidad** y Snake).
 
 Modos visuales (no necesitan red): **Navidad** (galería de 15 escenas, ver abajo), **Lluvia Matrix**, **Chimenea**, **Acuario**, **Fuegos artificiales**, **Plasma**, **Juego de la vida** (se reinicia solo si se estanca), **Estrellas** y **Visualizador de música** (barras de espectro; si no hay sonido muestra un espectro simulado).
+
+### Reloj Tetris
+
+Port del reloj de Tetris de la Raspberry (`src/tetris.py` y `src/tetris_led.py`): la hora (HH:MM) se forma con piezas de Tetris que **caen una tras otra y giran mientras bajan**; los cuatro dígitos se construyen a la vez, con los mismos datos de piezas del original. Cuando cambia el minuto, las piezas de los dígitos que cambian se desploman fuera del campo y caen las nuevas; los dígitos que no cambian no se tocan. En la pantalla grande se muestra dentro de un campo enmarcado con rejilla, el título TETRIS, un contador de **puntos** (suma al asentarse cada pieza) y una vista de la **pieza siguiente**.
+
+Opciones en Ajustes: **Formato 24 horas** (por defecto sí; en 12 horas la hora de un dígito deja el primer hueco vacío) y **Duración**. Con **Fijar modo** (Verde) se queda en pantalla.
 
 ### Navidad: galería de escenas
 
@@ -104,7 +110,7 @@ Suena en todos los modos, siempre suave. La tecla **Azul** la apaga o la enciend
 |--------|----------|
 | Música de fondo / Volumen | Enciende o apaga; volumen de 0 a 100 % (por defecto 35 %) |
 | Fuente de la música | **Radio en línea** (por defecto) o **Música incluida (sin internet)** |
-| Emisora ambiente | SomaFM: Drone Zone (por defecto), SomaFM: Deep Space One, SomaFM: Space Station Soma o **Kiss FM España (radio comercial, con anuncios)** |
+| Emisora de fondo | **Kiss FM España (radio comercial, con anuncios)** (por defecto), SomaFM: Drone Zone, SomaFM: Deep Space One o SomaFM: Space Station Soma |
 | Música en Navidad | **Villancicos (incluidos)** (por defecto) o "Radio: Christmas Lounge (lounge navideño)" |
 
 Cómo funciona:
@@ -148,7 +154,7 @@ Créditos: radio de **SomaFM** (somafm.com), independiente y financiada por sus 
 
 ## Limitaciones de la v1
 
-- No incluidos: Tetris, Imágenes (GIF), Sistema, Comandos, Notificaciones, sincronización con el panel web de la Raspberry. Son de hardware o necesitan el servidor.
+- No incluidos: Imágenes (GIF), Sistema, Comandos, Notificaciones y la sincronización con el panel web de la Raspberry: dependen del hardware de la Raspberry o de su servidor. (El Tetris de la Raspberry sí está: es el widget **Reloj Tetris**; antes figuraba aquí por error.)
 - La música incluida es sintética (osciladores), no una grabación; las melodías de los villancicos están escritas de memoria y pueden diferir de la partitura. La radio depende de internet y de que la emisora acepte la conexión (SomaFM devolvió 403 en pruebas desde un entorno de desarrollo).
 - **No verificado**: cómo suena la música incluida, su reproducción como archivo local en la TV, el rendimiento en la TV real; las pruebas de audio usan un elemento `<audio>` simulado.
 - La clave de TheSportsDB es la gratuita (`3`); CoinGecko puede limitar peticiones.

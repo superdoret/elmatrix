@@ -175,7 +175,7 @@ function harness(id, over, pinned) {
   return { clock, sch, fb, signal, p, isDone: () => done, err: () => err };
 }
 
-const ALL = [['clock'], ['worldclock'], ['countdown'], ['rates'], ['forecast'], ['sports'], ['word'], ['pixelart', { style: 'scene' }], ['pixelart', { style: 'snake' }], ['pixelart', { style: 'navidad' }],
+const ALL = [['clock'], ['tetris'], ['worldclock'], ['countdown'], ['rates'], ['forecast'], ['sports'], ['word'], ['pixelart', { style: 'scene' }], ['pixelart', { style: 'snake' }], ['pixelart', { style: 'navidad' }],
   ['matrixrain'], ['fireplace'], ['aquarium'], ['fireworks'], ['plasma'], ['life'], ['starfield'], ['visualizer']];
 
 ALL.forEach(([id, over]) => {
@@ -224,7 +224,7 @@ test('offline screens are fixed loops: a pinned rates widget retries instead of 
 // ---- pinned for a few simulated minutes: no blank frames, no frozen animation, no memory growth -----------------
 v8.setFlagsFromString('--expose-gc');
 const gc = vm.runInNewContext('gc');
-const ANIMATED = new Set(['clock', 'matrixrain', 'fireplace', 'aquarium', 'fireworks', 'plasma', 'life', 'starfield', 'visualizer', 'pixelart', 'forecast']);
+const ANIMATED = new Set(['clock', 'tetris', 'matrixrain', 'fireplace', 'aquarium', 'fireworks', 'plasma', 'life', 'starfield', 'visualizer', 'pixelart', 'forecast']);
 
 ALL.forEach(([id, over]) => {
   const name = id + (over ? ':' + over.style : '');

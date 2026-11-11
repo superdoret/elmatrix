@@ -32,3 +32,15 @@ T15-T17: delegated writer (agent a0e6ac3, has the full context of `webos/`). Sin
 - Design decisions: a run plays `scenes_per_visit` (default 4) scenes then returns to the rotation (not the whole gallery); scenes use a 192x100 design grid
   centred in the framebuffer (Pen); fade through dark between scenes; pin via ctx.loop (no extra code); `?scene=<id>` URL param = dev screenshots.
 - Verified: node --test 295 pass; npm run build ok; screenshots of all scenes viewed. NOT verified: look/performance on the real TV, taste.
+
+## T18-T20 (writer)
+- T18 default station = Kiss FM (stations table, catalog default, label "Emisora de fondo", README, tests). Migration: settings now saved with
+  `_v: 2`; a stored `music_station: dronezone` from older (schema-less) data is treated as never chosen -> Kiss FM; explicit choices (incl. dronezone saved with `_v: 2`) survive.
+- T19 live music settings. Root cause (reproduced red/green with the fake element): a station/source change made while the stream was still connecting
+  started a fade-out whose completion callback was cancelled by the old stream's late `playing` event (`fade()` replaced the timer), so the swap stayed
+  `swapping: true` forever and every later change was ignored until restart (old engine: elements 1, last src = old station, swapping true; new: swaps).
+  Also: the engine created a NEW <audio> element per connect (webOS 3 single pipeline) -> now ONE shared element (`reuseElement`), `loop` set explicitly each connect,
+  MediaElementSource only routed once per element. Central `E.audio.applySettings(engine, settings.global)` is called by app.js at boot and on every settings change.
+- T20 new widget `tetris` (Reloj Tetris, category Reloj): port of src/tetris_led.py number data (digits 0-9 as tetromino lists), framed 31x16 block field,
+  score + next-piece decoration, minute-change drop-out/rebuild. README fixed (Tetris is included; the "hardware/server" reason was wrong).
+- NOT verified: real TV (audio swap behaviour on webOS 3, Tetris look/perf), Green key.
