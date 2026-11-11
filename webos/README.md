@@ -25,6 +25,10 @@ Parámetros de URL útiles para pruebas:
 | `&hint=0` | Oculta la ayuda de teclas |
 | `&music=0` | Desactiva la música (útil para capturas y pruebas) |
 
+## Línea de créditos
+
+En la parte inferior de la pantalla, en todos los modos, aparece "Desarrollado por Matias Toro". El texto está en un solo sitio (`index.html`, elemento `#credit`) y un test comprueba que llega a `dist/index.html`. La rejilla de LEDs reserva una franja inferior del 6,5 % de la altura para esa línea, así que no tapa el contenido.
+
 ## Compilar para el televisor (ES5)
 
 El código fuente es JavaScript moderno. Los televisores con webOS 3.x (Chromium 38) no lo entienden (`async/await`, `URLSearchParams`, `fetch`...), así que el paquete para la TV se genera con Babel en `dist/`:
@@ -81,25 +85,42 @@ Suena en todos los modos, siempre suave. La tecla **Azul** la apaga o la enciend
 | Ajuste | Qué hace |
 |--------|----------|
 | Música de fondo / Volumen | Enciende o apaga; volumen de 0 a 100 % (por defecto 35 %) |
-| Fuente de la música | **Radio en línea** (por defecto) o **Sintetizada** (sin internet) |
-| Emisora ambiente | Drone Zone (por defecto), Deep Space One o Space Station Soma |
-| Música en Navidad | **Villancicos sintetizados** (por defecto) o "Radio: Christmas Lounge (lounge navideño)" |
+| Fuente de la música | **Radio en línea** (por defecto) o **Música incluida (sin internet)** |
+| Emisora ambiente | SomaFM: Drone Zone (por defecto), SomaFM: Deep Space One, SomaFM: Space Station Soma o **Kiss FM España (radio comercial, con anuncios)** |
+| Música en Navidad | **Villancicos (incluidos)** (por defecto) o "Radio: Christmas Lounge (lounge navideño)" |
 
 Cómo funciona:
 
-- **Radio en línea**: la app reproduce una emisora ambient de [SomaFM](https://somafm.com) (MP3 de 128 kbps) con un elemento `<audio>`, mezclada con el mismo control de volumen y el visualizador. Necesita internet.
-- **Sin conexión o si falla la emisora**: tras 3 intentos fallidos (reintenta a los 2 s y 4 s) o si la TV no tiene red, cambia sola a la música **sintetizada** (generada con Web Audio, sin archivos) y vuelve a probar la radio en segundo plano cada 3 minutos. El cambio es con fundido de ~3 s.
-- **Sintetizada**: pads ambientales lentos con campanitas y notas sueltas de una escala pentatónica, con reverb y eco; nunca se repite igual.
-- **Navidad**: al mostrarse el modo Navidad de Pixel art, la música pasa (con fundido) a **villancicos sintetizados** tocados muy despacio y suaves: Noche de paz, Away in a Manger, Oh abeto, Jingle Bells (lento) y We Wish You a Merry Christmas (lento). Cada vuelta cambia la tonalidad, la octava, la voz y los acordes. No necesitan internet. La opción "Radio: Christmas Lounge" es música *lounge* navideña, no villancicos clásicos.
+- **Todo el sonido sale por un único elemento `<audio>` con MP3.** Es lo que se comprobó en una TV real con webOS 3: ver "Qué se encontró en webOS 3" más abajo.
+- **Radio en línea**: reproduce una emisora ambient de [SomaFM](https://somafm.com) (MP3 de 128 kbps) o, si la elegís, **Kiss FM España** ([kissfm.es](https://kissfm.es), MP3 de 56 kbps). Necesita internet. La URL de Kiss FM redirige a la emisión real con un permiso firmado que caduca; la TV sigue las redirecciones sola y la app vuelve a pedir la URL en cada reconexión.
+- **Sin conexión o si falla la emisora**: reintenta a los 2 s y 4 s; tras 3 fallos seguidos, o si la TV no tiene red, pasa a la **música incluida** (`assets/music/ambient.mp3`, en bucle). Cada 3 minutos comprueba en silencio si la radio responde y, si es así, hace el cambio con fundidos.
+- **Música incluida**: dos pistas MP3 de unos 4,5 minutos (`ambient.mp3` y `christmas.mp3`, ~2,2 MB cada una, 64 kbps mono 32 kHz) generadas por nosotros con síntesis (pads suaves, campanitas, reverb y eco). Son **versiones propias de melodías de dominio público**, sin licencia de terceros.
+- **Navidad**: al mostrarse el modo Navidad de Pixel art, la música pasa a `christmas.mp3`: Noche de paz, Away in a Manger, Oh abeto, Jingle Bells (lento) y We Wish You a Merry Christmas (lento), con tonalidad, octava y voz distintas en cada pasada. No necesita internet. La opción "Radio: Christmas Lounge" es música *lounge* navideña, no villancicos clásicos.
+- **Un solo elemento a la vez**: los cambios son secuenciales (baja el volumen del actual, se cambia la fuente y sube el nuevo), nunca dos sonando juntos.
+- **Visualizador**: usa el analizador de audio solo en navegadores modernos. En la TV siempre usa el espectro simulado (y también si el analizador lee solo ceros durante ~2 s).
 - **Sonido bloqueado**: si el motor web no deja iniciar el audio sin interacción, aparece "Pulsa OK para activar el sonido" y arranca con la primera tecla.
 
-Créditos: radio de **SomaFM** (somafm.com), una emisora independiente financiada por sus oyentes. Las URL de las emisoras están en una sola tabla (`js/music/stations.js`) por si alguna cambia o desaparece. **No se revisaron formalmente los términos de uso de SomaFM**: este uso es personal; si la vas a usar en un local público, revisalos o elegí "Sintetizada".
+### Qué se encontró en webOS 3 (Chromium 38)
+
+Probado en una TV real: el audio de **Web Audio no sale por los altavoces** (aunque el contexto corre), y los **WAV no funcionan** en `<audio>` (error 4). Los **MP3** sí, tanto de internet como (por probar) archivos locales. Por eso la música sintetizada ya no se genera en la TV: se renderiza una vez en el ordenador y se incluye como MP3. La reproducción de los MP3 incluidos en la TV **no se ha verificado todavía**.
+
+### Volver a generar la música incluida
+
+Solo hace falta si cambias las melodías o la síntesis (`tools/music/` y `tools/lib/offline-synth.js`); `npm run build` **no** necesita ffmpeg porque los MP3 ya están en `assets/music/`.
+
+```bash
+cd webos
+npm run render-music   # requiere ffmpeg; genera assets/music/ambient.mp3 y christmas.mp3 (determinista)
+npm run build
+```
+
+Créditos: radio de **SomaFM** (somafm.com), independiente y financiada por sus oyentes, y **Kiss FM España** (kissfm.es), emisora comercial. **No se revisaron formalmente los términos de uso de ninguna de las dos**: son emisiones públicas usadas para escucha personal; Kiss FM puede incluir anuncios y locución, y no es música ambient. Las URL están en una sola tabla (`js/music/stations.js`) por si alguna cambia o desaparece. Para un local público, revisá los términos o elegí "Música incluida".
 
 ## Limitaciones de la v1
 
 - No incluidos: Tetris, Imágenes (GIF), Sistema, Comandos, Notificaciones, sincronización con el panel web de la Raspberry. Son de hardware o necesitan el servidor.
-- La música sintetizada es sintética (osciladores), no una grabación; las melodías de los villancicos están escritas de memoria y pueden diferir de la partitura. La radio depende de internet y de que SomaFM acepte la conexión (puede devolver 403 si hay demasiados intentos).
-- **No verificado**: cómo suena (ni la radio ni la síntesis), el rendimiento en la TV real ni la ejecución en Chromium 38; las pruebas con audio usan un `AudioContext` simulado.
+- La música incluida es sintética (osciladores), no una grabación; las melodías de los villancicos están escritas de memoria y pueden diferir de la partitura. La radio depende de internet y de que la emisora acepte la conexión (SomaFM devolvió 403 en pruebas desde un entorno de desarrollo).
+- **No verificado**: cómo suena la música incluida, su reproducción como archivo local en la TV, el rendimiento en la TV real; las pruebas de audio usan un elemento `<audio>` simulado.
 - La clave de TheSportsDB es la gratuita (`3`); CoinGecko puede limitar peticiones.
 - webOS 3.x se soporta solo mediante `dist/` (build ES5). El motor Chromium 38 **no se pudo ejecutar localmente**: se verificó que el JavaScript compilado sea ES5 válido y que no use APIs ni CSS ausentes en Chromium 38, pero la ejecución real depende de probar en la TV.
 - **No verificado en una TV real**: solo se probó en Chrome de escritorio (headless), tests de Node y capturas. No se probó el motor web de webOS, el rendimiento en el procesador de la TV, las teclas físicas del control ni `ares-package`/`ares-install` (las herramientas no estaban instaladas). La clave `resolution` de `appinfo.json` debería confirmarse contra tu versión de webOS.
@@ -107,4 +128,4 @@ Créditos: radio de **SomaFM** (somafm.com), una emisora independiente financiad
 
 ## Estructura
 
-`appinfo.json`, `index.html`, `css/`, `js/` (renderer, parser BDF, scheduler, ajustes, `compat.js`, `zones.js`, `audio.js`, `music/` (teoría, villancicos, emisoras, reproductor de radio), `widgets/`), `assets/fonts/`, `tests/`, `tools/` (build, iconos y fuente de respaldo), `dist/` (generado, no se versiona).
+`appinfo.json`, `index.html`, `css/`, `js/` (renderer, parser BDF, scheduler, ajustes, `compat.js`, `zones.js`, `audio.js`, `music/` (emisoras y reproductor), `widgets/`), `assets/fonts/`, `assets/music/` (MP3 incluidos), `tests/`, `tools/` (build, iconos, fuente de respaldo y render de la música), `dist/` (generado, no se versiona).

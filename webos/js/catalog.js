@@ -94,11 +94,11 @@
     { key: 'order', label: 'Orden', type: 'select', def: 'shuffle', options: opts(['shuffle', 'Aleatorio'], ['sequence', 'En secuencia']) },
     { key: 'music_enabled', label: 'Música de fondo', type: 'bool', def: true },
     { key: 'music_volume', label: 'Volumen de la música (%)', type: 'number', def: 35, min: 0, max: 100, step: 5 },
-    { key: 'music_source', label: 'Fuente de la música', type: 'select', def: 'stream', options: opts(['stream', 'Radio en línea'], ['synth', 'Sintetizada']) },
+    { key: 'music_source', label: 'Fuente de la música', type: 'select', def: 'stream', options: opts(['stream', 'Radio en línea'], ['incluida', 'Música incluida (sin internet)']) },
     { key: 'music_station', label: 'Emisora ambiente', type: 'select', def: 'dronezone',
       options: STATIONS.ofKind('ambient').map(function (s) { return { value: s.id, label: s.label }; }) },
     { key: 'christmas_source', label: 'Música en Navidad', type: 'select', def: 'carols',
-      options: opts(['carols', 'Villancicos sintetizados'], ['radio', 'Radio: Christmas Lounge (lounge navideño)']) }
+      options: opts(['carols', 'Villancicos (incluidos)'], ['radio', 'Radio: Christmas Lounge (lounge navideño)']) }
   ];
 
   function byId(id) {

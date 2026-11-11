@@ -52,3 +52,13 @@ T5-T8: delegated writer (agent a0e6ac3, has full context of `webos/`). Single wr
 - Live SomaFM: first request with a browser UA returned 200 audio/mpeg, later requests from this sandbox got 403 (curl and headless Chrome), so
   stream playback itself was NOT confirmed here; the failure path (connect -> backoff -> fallback to synth) was observed live in headless Chrome.
 - NOT verified: sound quality (nobody listened), TV performance, Chromium 38 execution.
+
+## Update T9-T11 (observed on the real TV by the coordinator, then implemented)
+- webOS 3: Web Audio output is SILENT, WAV unsupported in <audio>, MP3 works. So: all audible output is ONE <audio> element (MP3);
+  the synth runs offline in Node (`tools/lib/offline-synth.js`, `npm run render-music`, needs ffmpeg) and is shipped as
+  `assets/music/ambient.mp3` + `christmas.mp3` (~2.2 MB each, 64 kbps mono 32 kHz). Sources: `stream` (SomaFM / Kiss FM, plain URLs) and
+  `incluida` (bundled MP3). Radio failure -> bundled MP3 (sequential fade-out/swap/fade-in, never two elements). Web Audio is only an optional
+  analyser tap off-TV; visualizer simulates when silent/unavailable.
+- T10: credit line "Desarrollado por Matias Toro" in index.html (`#credit.byline`), bottom strip reserved by the renderer (6.5 %).
+- T11: Kiss FM España added as a selectable background station (commercial, ads; default stays SomaFM Drone Zone).
+- NOT verified: playing the bundled MP3 as a local file on the TV, how anything sounds, Kiss FM/SomaFM terms (not reviewed).

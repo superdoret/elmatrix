@@ -74,7 +74,9 @@
   function initAudio() {
     if (params.get('music') === '0') return;
     try {
-      audio = E.audio.createEngine({ onStatus: function () { updateSoundHint(); if (settingsOpen) renderCredit(); },
+      // Web Audio output is silent on LG TVs (webOS): there it is never used, not even for the visualizer tap.
+      var isTV = /web0s|webos|netcast|smarttv|tizen|hbbtv/i.test(navigator.userAgent || '');
+      audio = E.audio.createEngine({ analyser: !isTV, onStatus: function () { updateSoundHint(); if (settingsOpen) renderCredit(); },
         source: settings.global.music_source, station: settings.global.music_station, christmasSource: settings.global.christmas_source });
       applyAudio();
       if (audio.init()) { audio.start(); updateSoundHint(); } else audio = null;
@@ -83,7 +85,8 @@
 
   function renderCredit() {
     var el = document.getElementById('s-credit');
-    if (el) el.textContent = 'Radio: SomaFM (somafm.com)' + (audio ? '  ·  ' + audio.describe() : '');
+    if (el) var kiss = settings.global.music_source === 'stream' && settings.global.music_station === 'kissfm';
+    el.textContent = (kiss ? 'Radio: Kiss FM España (kissfm.es)' : 'Radio: SomaFM (somafm.com)') + (audio ? '  ·  ' + audio.describe() : '');
   }
 
   // ---- overlay helpers ----
@@ -249,7 +252,7 @@
     var resizeTimer = null;
     window.addEventListener('resize', function () {
       clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(function () { renderer.layout(window.innerWidth, window.innerHeight); scheduler.skip(); }, 300);
+      resizeTimer = setTimeout(function () { renderer.fit(); scheduler.skip(); }, 300);
     });
     if (params.get('settings') === '1') openSettings();
     window.__elmatrix = { scheduler: scheduler, renderer: renderer, audio: audio, model: function () { return model; } }; // test hook

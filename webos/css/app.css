@@ -1,7 +1,7 @@
 /* Written for Chromium 38 (webOS 3.x): no var(), no inset, no flex gap, no grid, -webkit- animations. */
 html { font-size: 1.667vw; } /* 32px at 1920 wide, scales down for 1280x720 */
 html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
-body { display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; -webkit-justify-content: center; justify-content: center; font-family: "LG Smart UI", "Helvetica Neue", Arial, sans-serif; color: #e8e8f2; }
+body { display: -webkit-flex; display: flex; -webkit-align-items: flex-start; align-items: flex-start; -webkit-justify-content: center; justify-content: center; font-family: "LG Smart UI", "Helvetica Neue", Arial, sans-serif; color: #e8e8f2; }
 canvas#matrix { display: block; background: #050509; }
 
 .toast {
@@ -46,3 +46,6 @@ canvas#matrix { display: block; background: #050509; }
 
 .hint.sound { top: 3%; bottom: auto; color: #ffd23c; }
 .s-hint.credit { margin-top: 0.1rem; color: #6a6a80; }
+
+/* Credit line in the strip below the LED grid (the grid reserves 6.5% of the height for it). */
+.byline { position: fixed; left: 0; right: 0; bottom: 3.2vh; text-align: center; font-size: 1.75vh; line-height: 1.2; letter-spacing: 0.04em; color: rgba(220, 226, 245, 0.55); pointer-events: none; -webkit-user-select: none; user-select: none; z-index: 1; }
