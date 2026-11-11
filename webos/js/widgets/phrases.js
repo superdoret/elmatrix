@@ -31,7 +31,7 @@
       var stars = [];
       for (var i = 0; i < 40; i++) stars.push({ x: ctx.rand(w), y: ctx.rand(h), p: ctx.rand(8) });
       var y = Math.floor((h - textH) / 2);
-      await ctx.loop(dur, 30, function (t) {
+      await ctx.loopFixed(dur, 30, function (t) {
         fb.clear(0);
         stars.forEach(function (s) {
           if (((Math.floor(t * 3) + s.p) % 6) < 3) fb.setPixel(s.x, s.y, 0x202038);

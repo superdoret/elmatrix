@@ -37,7 +37,7 @@
       case 'yellow': case 'play': case 'pause': return 'togglePause';
       case 'ok': case 'red': return 'openSettings';
       case 'info': case 'up': case 'down': return 'showHint';
-      case 'green': return 'next';
+      case 'green': return 'togglePin';
       case 'blue': return 'toggleMusic';
       default: return null;
     }

@@ -81,7 +81,7 @@ const press = (m, ...names) => names.map(n => m.handleKey(n));
 
 test('settings model: navigate, adjust number and select with left/right', () => {
   const { m, settings } = model();
-  press(m, 'right'); // on pause_seconds
+  press(m, 'down', 'right'); // row 0 is "Fijar modo actual"; row 1 is pause_seconds
   assert.strictEqual(settings.global.pause_seconds, 3);
   press(m, 'left', 'left', 'left');
   assert.strictEqual(settings.global.pause_seconds, 0);

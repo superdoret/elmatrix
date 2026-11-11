@@ -51,7 +51,7 @@
     });
   });
   var renderer, fonts, scheduler, net, model, audio = null;
-  var settingsOpen = false, hintTimer = null, toastTimer = null, pausedByVisibility = false;
+  var lastToastId = null, settingsOpen = false, hintTimer = null, toastTimer = null, pausedByVisibility = false;
 
   function realFetch(url, opts) {
     if (forceOffline) return Promise.reject(new Error('offline (forced)'));
@@ -67,6 +67,7 @@
     audio.setSource(settings.global.music_source);
     audio.setStation(settings.global.music_station);
     audio.setChristmasSource(settings.global.christmas_source);
+    audio.setLevels(settings.global.station_levels);
   }
   function updateSoundHint() {
     if (soundHint) soundHint.hidden = !(audio && audio.available && audio.needsGesture && settings.global.music_enabled);
@@ -86,7 +87,22 @@
   function renderCredit() {
     var el = document.getElementById('s-credit');
     if (el) var kiss = settings.global.music_source === 'stream' && settings.global.music_station === 'kissfm';
-    el.textContent = (kiss ? 'Radio: Kiss FM España (kissfm.es)' : 'Radio: SomaFM (somafm.com)') + (audio ? '  ·  ' + audio.describe() : '');
+    var ver = document.getElementById('version'), v = ver ? ver.textContent : '';
+    el.textContent = (kiss ? 'Radio: Kiss FM España (kissfm.es)' : 'Radio: SomaFM (somafm.com)') + (audio ? '  ·  ' + audio.describe() : '') + (v ? '  ·  ' + v : '');
+  }
+
+  // Version line: the build injects it into index.html. Opened directly for dev, the placeholder is still there:
+  // read it from appinfo.json instead (single source of truth).
+  function fillVersion() {
+    var el = document.getElementById('version');
+    if (!el || el.textContent.indexOf('{{') < 0) return;
+    el.textContent = '';
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', 'appinfo.json', true);
+      x.onload = function () { try { el.textContent = 'v' + JSON.parse(x.responseText).version; } catch (e) { /* leave empty */ } renderCredit(); };
+      x.send(null);
+    } catch (e2) { /* leave empty */ }
   }
 
   // ---- overlay helpers ----
@@ -147,7 +163,10 @@
   }
 
   function openSettings() {
-    model = new E.settingsmodel.SettingsModel(settings, { onChange: function () { store.save(); applyAudio(); updateSoundHint(); } });
+    model = new E.settingsmodel.SettingsModel(settings, {
+      onChange: function () { store.save(); applyAudio(); updateSoundHint(); },
+      getPin: function () { return scheduler.pinned; }, setPin: function (on) { scheduler.setPin(on); }
+    });
     settingsOpen = true;
     settingsEl.hidden = false;
     hint.hidden = true;
@@ -173,7 +192,7 @@
       var fx = model.handleKey(name);
       if (fx && fx.type === 'close') closeSettings();
       else if (fx && fx.type === 'runNow') { closeSettings(); scheduler.runNow(fx.id); }
-      else renderSettings();
+      else { renderSettings(); if (fx && fx.toast) showToast(fx.toast); }
       return;
     }
     var action = E.keys.bannerAction(name);
@@ -182,6 +201,7 @@
     if (action === 'next') scheduler.skip();
     else if (action === 'prev') scheduler.prev();
     else if (action === 'togglePause') scheduler.togglePause();
+    else if (action === 'togglePin') scheduler.togglePin();
     else if (action === 'openSettings') openSettings();
     else if (action === 'toggleMusic') {
       settings.global.music_enabled = !settings.global.music_enabled;
@@ -226,7 +246,13 @@
   function onEvent(type, data) {
     if (type === 'start') {
       var w = E.catalog.byId(data);
-      if (w && !settingsOpen) showToast(w.name, scheduler.paused);
+      if (w && !settingsOpen && data !== lastToastId) showToast(w.name, scheduler.paused); // a pinned re-run is not announced again
+      lastToastId = data;
+    } else if (type === 'pin') {
+      var pinEl = document.getElementById('pin'), cw = scheduler.current && E.catalog.byId(scheduler.current);
+      if (pinEl) pinEl.hidden = !data;
+      showToast(data ? 'Modo fijado: ' + (cw ? cw.name : 'actual') : 'Modo libre: sigue la rotación', scheduler.paused);
+      if (settingsOpen) renderSettings();
     } else if (type === 'gap') { renderer.fb.clear(0); renderer.markDirty(); }
     else if (type === 'pause') { if (data) showToast('Pausado  (Amarillo para continuar)', true, 'paused'); else { toast.hidden = true; } }
     else if (type === 'idle') idleScreen();
@@ -243,6 +269,7 @@
       runWidget: runWidget, onEvent: onEvent, rng: rng
     });
     renderer.start();
+    fillVersion();
     initAudio();
     document.addEventListener('keydown', onKey);
     document.addEventListener('visibilitychange', function () {

@@ -56,7 +56,7 @@
         var geo = parseGeocode(await ctx.abortable(ctx.getJson(GEOCODE + encodeURIComponent(city), 7 * 86400000)));
         if (!geo) {
           fb.clear(0);
-          await ctx.loop(4, 2, function () {
+          await ctx.loopFixed(4, 2, function () {
             ctx.drawFit('Ciudad no encontrada', { fonts: ['9x18B', '7x14B'], x: 4, y: 20, w: w - 8, h: 30, align: 'center', color: 0xffb020, maxScale: 2 });
             ctx.drawFit(city, { fonts: ['9x18B', '7x14B'], x: 4, y: 60, w: w - 8, h: 30, align: 'center', color: 0xc0c0d0, maxScale: 2 });
           });

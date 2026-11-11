@@ -27,7 +27,9 @@ Parámetros de URL útiles para pruebas:
 
 ## Línea de créditos
 
-En la parte inferior de la pantalla, en todos los modos, aparece "Desarrollado por Matias Toro". El texto está en un solo sitio (`index.html`, elemento `#credit`) y un test comprueba que llega a `dist/index.html`. La rejilla de LEDs reserva una franja inferior del 6,5 % de la altura para esa línea, así que no tapa el contenido.
+En la parte inferior de la pantalla, en todos los modos, aparece "Desarrollado por Matias Toro" a la izquierda y la versión (por ejemplo "v1.1.0") a la derecha. El texto está en un solo sitio (`index.html`, elemento `#credit`) y un test comprueba que llega a `dist/index.html`. La versión sale de `appinfo.json`: el build la inyecta en `dist/index.html` y, si abrís `index.html` directamente para desarrollar, la app la lee de `appinfo.json`. Los Ajustes también la muestran.
+
+**Cambiar la versión**: editá `"version"` en `appinfo.json` y en `package.json` (y `package-lock.json`); un test comprueba que coincidan. webOS exige el formato x.y.z. El paquete se llama según la versión: `com.elmatrix.tv_1.1.0_all.ipk`. La rejilla de LEDs reserva una franja inferior del 6,5 % de la altura para esa línea, así que no tapa el contenido.
 
 ## Compilar para el televisor (ES5)
 
@@ -47,8 +49,8 @@ Requisitos: TV LG con webOS 3.x o superior, cuenta de LG Developer y la app **De
 
 1. Instalá las herramientas: `npm i -g @webos-tools/cli`
 2. Registrá la TV: `ares-setup-device` (agregá un dispositivo con la IP de la TV, puerto 9922, usuario `prisoner`)
-3. Compilá y empaquetá: `npm run build` y luego `ares-package dist` (genera `com.elmatrix.tv_1.0.0_all.ipk`)
-4. Instalá: `ares-install --device <nombre> com.elmatrix.tv_1.0.0_all.ipk`
+3. Compilá y empaquetá: `npm run build` y luego `ares-package dist` (genera `com.elmatrix.tv_<versión>_all.ipk`, por ejemplo `com.elmatrix.tv_1.1.0_all.ipk`)
+4. Instalá: `ares-install --device <nombre> com.elmatrix.tv_1.1.0_all.ipk`
 5. Abrila: `ares-launch --device <nombre> com.elmatrix.tv`
 
 Resultado esperado: aparece la app "eLMaTrIx" en la TV y empieza a rotar widgets. Si la pantalla queda negra, mirá la consola con `ares-inspect --device <nombre> --app com.elmatrix.tv --open`.
@@ -66,7 +68,9 @@ Se cubre con el build ES5, que incluye: Babel (sintaxis), `regenerator-runtime` 
 | Rojo | Abrir ajustes | Cerrar |
 | Amarillo o Pausa/Play | Pausar o continuar | Borrar elemento de una lista |
 | Atrás | Salir de la app (lo maneja la TV) | Volver / cerrar |
-| Verde (teclado en pantalla) | Widget siguiente | Borrar carácter |
+| Verde | **Fijar o liberar el modo actual** (ver abajo) | Borrar carácter (teclado en pantalla) |
+
+**Fijar el modo**: con Verde (o la primera fila de Ajustes, "Fijar modo actual") el modo que se está mostrando se queda en pantalla y **sigue animándose** sin reiniciarse; la rotación se detiene hasta que lo liberes. Izquierda/Derecha cambian de modo y el modo nuevo queda fijado; Amarillo pausa también si está fijado. Mientras está fijo aparece "Fijo" en la línea inferior, y un aviso al fijar y al liberar. Es solo de la sesión (no se guarda). La música no cambia (un Navidad fijado mantiene la música navideña). Los modos con contenido de duración propia (frases que se desplazan, pantallas "Sin conexión") se repiten sin pausa en vez de estirarse.
 
 En el escritorio: flechas, Enter, Esc, y las letras `r`, `y`, `g`, `b` como teclas de color; Espacio pausa.
 
@@ -99,6 +103,18 @@ Cómo funciona:
 - **Un solo elemento a la vez**: los cambios son secuenciales (baja el volumen del actual, se cambia la fuente y sube el nuevo), nunca dos sonando juntos.
 - **Visualizador**: usa el analizador de audio solo en navegadores modernos. En la TV siempre usa el espectro simulado (y también si el analizador lee solo ceros durante ~2 s).
 - **Sonido bloqueado**: si el motor web no deja iniciar el audio sin interacción, aparece "Pulsa OK para activar el sonido" y arranca con la primera tecla.
+
+### Niveles: que todas las fuentes suenen igual de fuerte
+
+En la TV el volumen de un `<audio>` no puede pasar de 1,0 y Web Audio no suena, así que solo se puede **bajar** lo que suena más fuerte. Cada emisora tiene un *trim* fijo en `js/music/stations.js` (0,05 a 1,0) y el volumen final es `volumen de la música × trim × nivel de esa estación`, siempre ≤ 1,0.
+
+| Fuente | Nivel medido (LUFS) | Trim inicial |
+|--------|--------------------|--------------|
+| Kiss FM España | -15,2 (pico -7,6 dBFS) | 1,0 (la referencia) |
+| Música incluida (`ambient.mp3` / `christmas.mp3`) | -16,1 / -15,9 (pico real -4,2 / -3,4 dBFS) | 1,0 |
+| SomaFM (todas) | **no se pudo medir** desde el equipo de desarrollo (somafm.com devolvió 403) | 0,7 (≈ -3 dB, **una estimación inicial**) |
+
+Los archivos incluidos se renderizan a ≈ -16 LUFS con pico real ≤ -1,5 dBFS (ganancia + limitador suave en `tools/lib/offline-synth.js`; se midieron con `ffmpeg -af ebur128=peak=true`). Si SomaFM te suena más fuerte o más suave que Kiss FM, ajustalo **de oído**: en Ajustes, la fila **Nivel de esta estación** (Izquierda/Derecha en pasos de 5 %, de 50 % a 100 %) cambia el nivel de la emisora seleccionada (o de la música incluida, si esa es la fuente) y se aplica al instante con un aviso del porcentaje. Se guarda por emisora, así que al cambiar de emisora vuelve su nivel. Si hace falta, cambiá el trim base en la tabla.
 
 ### Qué se encontró en webOS 3 (Chromium 38)
 

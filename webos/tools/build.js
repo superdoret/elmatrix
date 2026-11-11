@@ -38,7 +38,11 @@ fs.writeFileSync(path.join(dist, 'js', 'elmatrix.js'), compiled.join('\n;\n') + 
 const first = html.indexOf('<script src=');
 const lastTag = '</script>';
 const last = html.lastIndexOf(lastTag) + lastTag.length;
-const outHtml = html.slice(0, first) + '<script src="js/polyfills.js"></script>\n  <script src="js/elmatrix.js"></script>' + html.slice(last);
+let outHtml = html.slice(0, first) + '<script src="js/polyfills.js"></script>\n  <script src="js/elmatrix.js"></script>' + html.slice(last);
+// single source of truth for the version: appinfo.json
+const version = JSON.parse(fs.readFileSync(rel('appinfo.json'), 'utf8')).version;
+if (!outHtml.includes('{{VERSION}}')) throw new Error('index.html has no {{VERSION}} placeholder');
+outHtml = outHtml.split('{{VERSION}}').join(version);
 fs.writeFileSync(path.join(dist, 'index.html'), outHtml);
 
 // static files
@@ -48,4 +52,5 @@ fs.cpSync(rel('assets'), path.join(dist, 'assets'), { recursive: true });
 
 const kb = f => (fs.statSync(path.join(dist, f)).size / 1024).toFixed(0) + ' KB';
 console.log('dist/ built: js/elmatrix.js ' + kb('js/elmatrix.js') + ', js/polyfills.js ' + kb('js/polyfills.js') + ' (' + scripts.length + ' scripts compiled)');
+console.log('version ' + version + ' injected; package: com.elmatrix.tv_' + version + '_all.ipk');
 console.log('Next: ares-package dist');

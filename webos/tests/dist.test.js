@@ -113,7 +113,10 @@ test('dist ships the bundled MP3s (assets/music) and the credit line', () => {
     assert.strictEqual(fs.statSync(a).size, fs.statSync(b).size);
   });
   const html = fs.readFileSync(path.join(dist, 'index.html'), 'utf8');
-  assert.ok(html.includes('<div id="credit" class="byline">Desarrollado por Matias Toro</div>'), 'credit text in dist/index.html');
+  const version = JSON.parse(fs.readFileSync(path.join(dist, 'appinfo.json'), 'utf8')).version;
+  assert.ok(html.includes('<span class="by-left">Desarrollado por Matias Toro</span>'), 'credit text (left) in dist/index.html');
+  assert.ok(html.includes('<span id="version" class="by-right">v' + version + '</span>'), 'version (right) matches dist/appinfo.json: ' + version);
+  assert.ok(!html.includes('{{'), 'no unreplaced placeholders');
   assert.ok(fs.readFileSync(path.join(root, 'index.html'), 'utf8').includes('Desarrollado por Matias Toro'));
   assert.ok(/\.byline\s*\{[^}]*pointer-events:\s*none/.test(fs.readFileSync(path.join(dist, 'css', 'app.css'), 'utf8')), 'credit ignores input');
   // the music data used only by the offline renderer is not part of the shipped scripts

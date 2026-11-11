@@ -74,7 +74,7 @@
       var fb = ctx.fb, w = ctx.w, h = ctx.h, cfg = ctx.cfg, TL = ctx.TL;
       var teamName = String(cfg.team || '').trim();
       var msg = async function (lines, color, secs) {
-        await ctx.loop(secs || 4, 2, function () {
+        await ctx.loopFixed(secs || 4, 2, function () {
           fb.clear(0);
           lines.forEach(function (l, i) {
             ctx.drawFit(l, { fonts: ['9x18B', '7x14B'], x: 4, y: 20 + i * 34, w: w - 8, h: 30, align: 'center', color: color, maxScale: 2 });

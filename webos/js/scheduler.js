@@ -86,6 +86,7 @@
     this.picker = new Picker(deps.rng);
     this.running = false;
     this.paused = false;
+    this.pinned = false;     // session-only: keep the current mode (it never moves on by itself)
     this.pausedAt = 0;
     this.pausedTotal = 0;
     this.current = null;
@@ -146,6 +147,16 @@
   };
   Scheduler.prototype.togglePause = function () { if (this.paused) this.resume(); else this.pause(); };
 
+  /* Pin ("fijar"): the running widget keeps animating past its duration (see ctx.loop) and finished one-shot widgets
+   * are re-run at once. Manual next/prev/run-now still change mode and the pin follows the new mode. */
+  Scheduler.prototype.setPin = function (on) {
+    on = !!on;
+    if (on === this.pinned) return;
+    this.pinned = on;
+    this._emit('pin', on);
+  };
+  Scheduler.prototype.togglePin = function () { this.setPin(!this.pinned); };
+
   Scheduler.prototype.skip = function () {
     if (this.paused) this.resume();
     if (this.signal) this.signal.abort();
@@ -175,7 +186,7 @@
         continue;
       }
       this.current = id;
-      this.history.push(id);
+      if (this.history[this.history.length - 1] !== id) this.history.push(id); // a pinned re-run is the same entry
       if (this.history.length > 30) this.history.shift();
       this.signal = new Signal();
       var sig = this.signal;
@@ -183,7 +194,8 @@
         signal: sig,
         sleep: this.sleep.bind(this),
         activeNow: this.activeNow.bind(this),
-        isPaused: function () { return this.paused; }.bind(this)
+        isPaused: function () { return this.paused; }.bind(this),
+        isPinned: function () { return this.pinned; }.bind(this)
       };
       control.sleep = function (ms) { return this.sleep(ms, sig); }.bind(this);
       this._emit('start', id);
@@ -199,6 +211,7 @@
       this._emit('end', id);
       this.current = null;
       if (!this.running) break;
+      if (this.pinned && !this.forced && !sig.aborted) this.forced = id; // pinned one-shot finished: re-run now, no gap
       if (!this.forced) {
         var pauseMs = Math.max(0, Number(this.deps.getPauseSeconds()) || 0) * 1000;
         if (pauseMs > 0) {
