@@ -132,7 +132,7 @@ test('pin is session-only and emits events; the green key toggles it on the bann
   t.s.setPin(true); t.s.setPin(true); t.s.togglePin();
   assert.deepStrictEqual(events, [['pin', true], ['pin', false]]);
   assert.strictEqual(new Scheduler({ getEnabled: () => [], getPauseSeconds: () => 0, getOrder: () => 'shuffle', runWidget: async () => {} }).pinned, false);
-  assert.ok(!JSON.stringify(S.defaults()).includes('pin'), 'not part of the persisted settings');
+  assert.ok(!/"pinned?"/.test(JSON.stringify(S.defaults())), 'not part of the persisted settings');
   assert.strictEqual(keys.bannerAction('green'), 'togglePin');
   assert.strictEqual(keys.bannerAction('yellow'), 'togglePause');
   // in settings, green is not routed to the pin (the model ignores it outside the keyboard)
@@ -175,7 +175,7 @@ function harness(id, over, pinned) {
   return { clock, sch, fb, signal, p, isDone: () => done, err: () => err };
 }
 
-const ALL = [['clock'], ['worldclock'], ['countdown'], ['rates'], ['forecast'], ['sports'], ['word'], ['pixelart', { style: 'scene' }], ['pixelart', { style: 'snake' }], ['pixelart', { style: 'navidad' }],
+const ALL = [['clock'], ['tetris'], ['worldclock'], ['countdown'], ['rates'], ['forecast'], ['sports'], ['word'], ['pixelart', { style: 'scene' }], ['pixelart', { style: 'snake' }], ['pixelart', { style: 'navidad' }],
   ['matrixrain'], ['fireplace'], ['aquarium'], ['fireworks'], ['plasma'], ['life'], ['starfield'], ['visualizer']];
 
 ALL.forEach(([id, over]) => {
@@ -224,7 +224,7 @@ test('offline screens are fixed loops: a pinned rates widget retries instead of 
 // ---- pinned for a few simulated minutes: no blank frames, no frozen animation, no memory growth -----------------
 v8.setFlagsFromString('--expose-gc');
 const gc = vm.runInNewContext('gc');
-const ANIMATED = new Set(['clock', 'matrixrain', 'fireplace', 'aquarium', 'fireworks', 'plasma', 'life', 'starfield', 'visualizer', 'pixelart', 'forecast']);
+const ANIMATED = new Set(['clock', 'tetris', 'matrixrain', 'fireplace', 'aquarium', 'fireworks', 'plasma', 'life', 'starfield', 'visualizer', 'pixelart', 'forecast']);
 
 ALL.forEach(([id, over]) => {
   const name = id + (over ? ':' + over.style : '');

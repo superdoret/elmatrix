@@ -25,7 +25,11 @@
       setTimeout: function (f, ms) { return setTimeout(f, ms); }, clearTimeout: function (t) { clearTimeout(t); },
       setInterval: function (f, ms) { return setInterval(f, ms); }, clearInterval: function (t) { clearInterval(t); }
     };
-    var createElement = opts.createElement || (typeof g.Audio === 'function' ? function () { return new g.Audio(); } : null);
+    var makeElement = opts.createElement || (typeof g.Audio === 'function' ? function () { return new g.Audio(); } : null);
+    // ONE <audio> element for the whole session: webOS 3 has a single media pipeline and a second element can stay silent or
+    // keep the first one's decoder busy. Players tear the element down (pause, no src, load()) and the next connect reuses it.
+    var sharedEl = null;
+    var createElement = !makeElement ? null : (opts.reuseElement === false ? makeElement : function () { return sharedEl || (sharedEl = makeElement()); });
     var isOnline = opts.isOnline || function () { return !(typeof navigator !== 'undefined' && navigator.onLine === false); };
     var now = opts.now || function () { return Date.now(); };
     var Ctor = opts.analyser === false ? null : (opts.AudioContext !== undefined ? opts.AudioContext : (g.AudioContext || g.webkitAudioContext || null));
@@ -36,7 +40,7 @@
     var swapping = false, pendingBegin = null, muteTimer = null, started = false, silentSince = 0;
     var eng = {
       available: false, enabled: true, volume: 0.35, needsGesture: false, defaultTrack: 'ambient', currentTrack: null, error: null,
-      source: opts.source || 'stream', station: opts.station || 'dronezone', christmasSource: opts.christmasSource || 'carols',
+      source: opts.source || 'stream', station: opts.station || 'kissfm', christmasSource: opts.christmasSource || 'carols',
       streamState: 'idle', streamBlocked: false, ctxSuspended: false, role: 'primary', levels: {}
     };
 
@@ -75,7 +79,9 @@
       var el = slot && slot.player && slot.player.element();
       if (el) { try { el.volume = Math.max(0, Math.min(1, target(slot))); } catch (e) { /* ignore */ } }
     }
-    function fade(slot, to, secs, done) {
+    function fade(slot, to, secs, done, force) {
+      // a slot that is being replaced only accepts its own fade-out: a late 'playing' event must not cancel it (that left the swap stuck)
+      if (slot.leaving && !force) return;
       if (slot.fadeTimer) { timers.clearTimeout(slot.fadeTimer); slot.fadeTimer = null; }
       var from = slot.level, steps = Math.max(1, Math.round(secs * 1000 / STEP_MS)), i = 0;
       (function step() {
@@ -87,8 +93,9 @@
 
     // ---- optional analyser tap (modern browsers only; skipped on TVs by the caller) ----
     function routeElement(el) {
-      if (!Ctor) return;
+      if (!Ctor || el.__elmRouted) return; // createMediaElementSource works once per element
       try {
+        el.__elmRouted = true;
         if (!ctx) {
           ctx = new Ctor();
           analyser = ctx.createAnalyser(); analyser.fftSize = 1024; analyser.smoothingTimeConstant = 0.8;
@@ -112,7 +119,7 @@
     }
 
     function onPlayerState(slot, state) {
-      if (cur !== slot) return;
+      if (cur !== slot || slot.leaving) return;
       eng.streamState = state;
       eng.streamBlocked = state === 'blocked';
       recomputeGesture();
@@ -175,12 +182,13 @@
       if (swapping) return;
       swapping = true;
       var old = cur;
+      old.leaving = true;
       var finish = function () {
         teardown(old); swapping = false;
         var fn = pendingBegin; pendingBegin = null; cur = null;
         if (fn) fn();
       };
-      if (old.player && old.player.element() && eng.enabled) fade(old, 0, FADE_OUT, finish); else finish();
+      if (old.player && old.player.element() && eng.enabled) fade(old, 0, FADE_OUT, finish, true); else finish();
     }
 
     // ---- public API ----
@@ -282,7 +290,19 @@
     return eng;
   }
 
-  var api = { createEngine: createEngine, FADE_OUT: FADE_OUT, FADE_IN: FADE_IN, RECOVER_MS: RECOVER_MS, SILENCE_MS: SILENCE_MS };
+  /* The one place that pushes every music-related setting into the engine (app.js calls it at boot and on EVERY settings
+   * change). Each setter is a no-op when the value did not change, and re-creates the playing track when it did. */
+  function applySettings(eng, g) {
+    if (!eng || !g) return;
+    eng.setSource(g.music_source);
+    eng.setStation(g.music_station);
+    eng.setChristmasSource(g.christmas_source);
+    eng.setLevels(g.station_levels);
+    eng.setVolume(g.music_volume / 100);
+    eng.setEnabled(!!g.music_enabled);
+  }
+
+  var api = { applySettings: applySettings, createEngine: createEngine, FADE_OUT: FADE_OUT, FADE_IN: FADE_IN, RECOVER_MS: RECOVER_MS, SILENCE_MS: SILENCE_MS };
   E.audio = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : global);

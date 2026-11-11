@@ -30,6 +30,11 @@
         { key: 'show_date', label: 'Mostrar fecha', type: 'bool', def: true },
         duration(10, 3, 120)
       ] },
+    { id: 'tetris', name: 'Reloj Tetris', description: 'La hora formada por piezas de Tetris que caen y se acomodan.', category: 'Reloj', network: false, def_enabled: true,
+      fields: [
+        { key: 'format24h', label: 'Formato 24 horas', type: 'bool', def: true },
+        duration(25, 5, 120)
+      ] },
     { id: 'worldclock', name: 'Reloj mundial', description: 'Hora actual en varias ciudades.', category: 'Reloj', network: false, def_enabled: true,
       fields: [
         { key: 'zones', label: 'Zonas horarias', type: 'list', def: ['Barcelona|Europe/Madrid', 'Rosario|America/Argentina/Cordoba', 'Tokyo|Asia/Tokyo'],
@@ -71,6 +76,27 @@
         duration(20)
       ] },
 
+    { id: 'navidad', name: 'Navidad', description: 'Galería de escenas navideñas animadas: árbol, belén, Papá Noel, chimenea y muchas más.', category: 'Entretenimiento', network: false, def_enabled: true,
+      fields: [
+        duration(18, 6, 60),
+        { key: 'scenes_per_visit', label: 'Escenas por visita', type: 'number', def: 4, min: 1, max: 15, step: 1, help: 'Cuántas escenas se muestran seguidas antes de volver a la rotación.' },
+        { key: 'order', label: 'Orden de las escenas', type: 'select', def: 'aleatorio', options: opts(['aleatorio', 'Aleatorio'], ['secuencial', 'Secuencial']) },
+        { key: 'scene_arbol', label: 'Escena: Árbol de Navidad', type: 'bool', def: true },
+        { key: 'scene_muneco', label: 'Escena: Muñeco de nieve', type: 'bool', def: true },
+        { key: 'scene_santa', label: 'Escena: Papá Noel sobre los tejados', type: 'bool', def: true },
+        { key: 'scene_chimenea', label: 'Escena: Chimenea con medias', type: 'bool', def: true },
+        { key: 'scene_belen', label: 'Escena: Belén', type: 'bool', def: true },
+        { key: 'scene_reyes', label: 'Escena: Reyes Magos', type: 'bool', def: true },
+        { key: 'scene_pueblo', label: 'Escena: Pueblo nevado', type: 'bool', def: true },
+        { key: 'scene_jengibre', label: 'Escena: Casa de jengibre', type: 'bool', def: true },
+        { key: 'scene_globo', label: 'Escena: Globo de nieve', type: 'bool', def: true },
+        { key: 'scene_corona', label: 'Escena: Corona de Adviento', type: 'bool', def: true },
+        { key: 'scene_aurora', label: 'Escena: Aurora boreal sobre pinos', type: 'bool', def: true },
+        { key: 'scene_pinguinos', label: 'Escena: Pingüinos y osos polares', type: 'bool', def: true },
+        { key: 'scene_chocolate', label: 'Escena: Chocolate caliente', type: 'bool', def: true },
+        { key: 'scene_bolas', label: 'Escena: Bolas del árbol', type: 'bool', def: true },
+        { key: 'scene_anonuevo', label: 'Escena: Año Nuevo', type: 'bool', def: true },
+      ] },
     { id: 'matrixrain', name: 'Lluvia Matrix', description: 'Columnas de caracteres verdes cayendo, como en Matrix.', category: 'Entretenimiento', network: false, def_enabled: true,
       fields: [duration(20, 5, 120)] },
     { id: 'fireplace', name: 'Chimenea', description: 'Una chimenea con fuego, troncos y brasas.', category: 'Entretenimiento', network: false, def_enabled: true,
@@ -95,7 +121,7 @@
     { key: 'music_enabled', label: 'Música de fondo', type: 'bool', def: true },
     { key: 'music_volume', label: 'Volumen de la música (%)', type: 'number', def: 35, min: 0, max: 100, step: 5 },
     { key: 'music_source', label: 'Fuente de la música', type: 'select', def: 'stream', options: opts(['stream', 'Radio en línea'], ['incluida', 'Música incluida (sin internet)']) },
-    { key: 'music_station', label: 'Emisora ambiente', type: 'select', def: 'dronezone',
+    { key: 'music_station', label: 'Emisora de fondo', type: 'select', def: 'kissfm',
       options: STATIONS.ofKind('ambient').map(function (s) { return { value: s.id, label: s.label }; }) },
     { key: 'christmas_source', label: 'Música en Navidad', type: 'select', def: 'carols',
       options: opts(['carols', 'Villancicos (incluidos)'], ['radio', 'Radio: Christmas Lounge (lounge navideño)']) }

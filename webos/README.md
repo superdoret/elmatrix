@@ -27,9 +27,9 @@ Parámetros de URL útiles para pruebas:
 
 ## Línea de créditos
 
-En la parte inferior de la pantalla, en todos los modos, aparece "Desarrollado por Matias Toro" a la izquierda y la versión (por ejemplo "v1.1.0") a la derecha. El texto está en un solo sitio (`index.html`, elemento `#credit`) y un test comprueba que llega a `dist/index.html`. La versión sale de `appinfo.json`: el build la inyecta en `dist/index.html` y, si abrís `index.html` directamente para desarrollar, la app la lee de `appinfo.json`. Los Ajustes también la muestran.
+En la parte inferior de la pantalla, en todos los modos, aparece "Desarrollado por Matias Toro" a la izquierda y la versión (por ejemplo "v1.2.0") a la derecha. El texto está en un solo sitio (`index.html`, elemento `#credit`) y un test comprueba que llega a `dist/index.html`. La versión sale de `appinfo.json`: el build la inyecta en `dist/index.html` y, si abrís `index.html` directamente para desarrollar, la app la lee de `appinfo.json`. Los Ajustes también la muestran.
 
-**Cambiar la versión**: editá `"version"` en `appinfo.json` y en `package.json` (y `package-lock.json`); un test comprueba que coincidan. webOS exige el formato x.y.z. El paquete se llama según la versión: `com.elmatrix.tv_1.1.0_all.ipk`. La rejilla de LEDs reserva una franja inferior del 6,5 % de la altura para esa línea, así que no tapa el contenido.
+**Cambiar la versión**: editá `"version"` en `appinfo.json` y en `package.json` (y `package-lock.json`); un test comprueba que coincidan. webOS exige el formato x.y.z. El paquete se llama según la versión: `com.elmatrix.tv_1.2.0_all.ipk`. La rejilla de LEDs reserva una franja inferior del 6,5 % de la altura para esa línea, así que no tapa el contenido.
 
 ## Compilar para el televisor (ES5)
 
@@ -49,8 +49,8 @@ Requisitos: TV LG con webOS 3.x o superior, cuenta de LG Developer y la app **De
 
 1. Instalá las herramientas: `npm i -g @webos-tools/cli`
 2. Registrá la TV: `ares-setup-device` (agregá un dispositivo con la IP de la TV, puerto 9922, usuario `prisoner`)
-3. Compilá y empaquetá: `npm run build` y luego `ares-package dist` (genera `com.elmatrix.tv_<versión>_all.ipk`, por ejemplo `com.elmatrix.tv_1.1.0_all.ipk`)
-4. Instalá: `ares-install --device <nombre> com.elmatrix.tv_1.1.0_all.ipk`
+3. Compilá y empaquetá: `npm run build` y luego `ares-package dist` (genera `com.elmatrix.tv_<versión>_all.ipk`, por ejemplo `com.elmatrix.tv_1.2.0_all.ipk`)
+4. Instalá: `ares-install --device <nombre> com.elmatrix.tv_1.2.0_all.ipk`
 5. Abrila: `ares-launch --device <nombre> com.elmatrix.tv`
 
 Resultado esperado: aparece la app "eLMaTrIx" en la TV y empieza a rotar widgets. Si la pantalla queda negra, mirá la consola con `ares-inspect --device <nombre> --app com.elmatrix.tv --open`.
@@ -76,9 +76,29 @@ En el escritorio: flechas, Enter, Esc, y las letras `r`, `y`, `g`, `b` como tecl
 
 ## Widgets
 
-Reloj, Reloj mundial, Cuenta regresiva, Cotizaciones (CoinGecko + dolarapi.com), Pronóstico (Open-Meteo), Deportes (TheSportsDB), Frases positivas, Palabra y Pixel art (escena de día/noche, **Navidad** y Snake).
+Reloj, Reloj mundial, **Reloj Tetris**, Cuenta regresiva, Cotizaciones (CoinGecko + dolarapi.com), Pronóstico (Open-Meteo), Deportes (TheSportsDB), Frases positivas, Palabra y Pixel art (escena de día/noche, **Navidad** y Snake).
 
-Modos visuales (no necesitan red): **Lluvia Matrix**, **Chimenea**, **Acuario**, **Fuegos artificiales**, **Plasma**, **Juego de la vida** (se reinicia solo si se estanca), **Estrellas** y **Visualizador de música** (barras de espectro; si no hay sonido muestra un espectro simulado).
+Modos visuales (no necesitan red): **Navidad** (galería de 15 escenas, ver abajo), **Lluvia Matrix**, **Chimenea**, **Acuario**, **Fuegos artificiales**, **Plasma**, **Juego de la vida** (se reinicia solo si se estanca), **Estrellas** y **Visualizador de música** (barras de espectro; si no hay sonido muestra un espectro simulado).
+
+### Reloj Tetris
+
+Port del reloj de Tetris de la Raspberry (`src/tetris.py` y `src/tetris_led.py`): la hora (HH:MM) se forma con piezas de Tetris que **caen una tras otra y giran mientras bajan**; los cuatro dígitos se construyen a la vez, con los mismos datos de piezas del original. Cuando cambia el minuto, las piezas de los dígitos que cambian se desploman fuera del campo y caen las nuevas; los dígitos que no cambian no se tocan. En la pantalla grande se muestra dentro de un campo enmarcado con rejilla, el título TETRIS, un contador de **puntos** (suma al asentarse cada pieza) y una vista de la **pieza siguiente**.
+
+Opciones en Ajustes: **Formato 24 horas** (por defecto sí; en 12 horas la hora de un dígito deja el primer hueco vacío) y **Duración**. Con **Fijar modo** (Verde) se queda en pantalla.
+
+### Navidad: galería de escenas
+
+El widget **Navidad** muestra escenas navideñas animadas, todas dibujadas con código (sin imágenes), una detrás de otra con un fundido suave entre ellas, y pide la música navideña mientras está en pantalla. En cada visita muestra varias escenas seguidas y luego vuelve a la rotación normal. Escenas:
+
+| Escena | Escena | Escena |
+|--------|--------|--------|
+| Árbol de Navidad | Muñeco de nieve | Papá Noel sobre los tejados |
+| Chimenea con medias | Belén | Reyes Magos |
+| Pueblo nevado | Casa de jengibre | Globo de nieve |
+| Corona de Adviento | Aurora boreal sobre pinos | Pingüinos y osos polares |
+| Chocolate caliente | Bolas del árbol | Año Nuevo ("Feliz <año>": en enero el año que empieza, el resto del año el próximo) |
+
+Opciones en Ajustes (se pueden editar solo con el mando): **Duración** de cada escena (6 a 60 s, por defecto 18), **Escenas por visita** (por defecto 4), **Orden de las escenas** (aleatorio, sin repetir la misma dos veces seguidas, o secuencial) y un interruptor **Escena: …** por cada una (todas activas; si apagás todas se usan todas). Con **Fijar modo** (Verde) la escena actual se queda y sigue animándose. El estilo `Navidad` de Pixel art sigue existiendo y es la primera escena.
 
 Cada uno tiene sus opciones en Ajustes (se guardan en el almacenamiento local de la app). Si no hay red, los widgets con datos muestran "Sin conexión" y la rotación sigue.
 
@@ -90,7 +110,7 @@ Suena en todos los modos, siempre suave. La tecla **Azul** la apaga o la enciend
 |--------|----------|
 | Música de fondo / Volumen | Enciende o apaga; volumen de 0 a 100 % (por defecto 35 %) |
 | Fuente de la música | **Radio en línea** (por defecto) o **Música incluida (sin internet)** |
-| Emisora ambiente | SomaFM: Drone Zone (por defecto), SomaFM: Deep Space One, SomaFM: Space Station Soma o **Kiss FM España (radio comercial, con anuncios)** |
+| Emisora de fondo | **Kiss FM España (radio comercial, con anuncios)** (por defecto), SomaFM: Drone Zone, SomaFM: Deep Space One o SomaFM: Space Station Soma |
 | Música en Navidad | **Villancicos (incluidos)** (por defecto) o "Radio: Christmas Lounge (lounge navideño)" |
 
 Cómo funciona:
@@ -134,7 +154,7 @@ Créditos: radio de **SomaFM** (somafm.com), independiente y financiada por sus 
 
 ## Limitaciones de la v1
 
-- No incluidos: Tetris, Imágenes (GIF), Sistema, Comandos, Notificaciones, sincronización con el panel web de la Raspberry. Son de hardware o necesitan el servidor.
+- No incluidos: Imágenes (GIF), Sistema, Comandos, Notificaciones y la sincronización con el panel web de la Raspberry: dependen del hardware de la Raspberry o de su servidor. (El Tetris de la Raspberry sí está: es el widget **Reloj Tetris**; antes figuraba aquí por error.)
 - La música incluida es sintética (osciladores), no una grabación; las melodías de los villancicos están escritas de memoria y pueden diferir de la partitura. La radio depende de internet y de que la emisora acepte la conexión (SomaFM devolvió 403 en pruebas desde un entorno de desarrollo).
 - **No verificado**: cómo suena la música incluida, su reproducción como archivo local en la TV, el rendimiento en la TV real; las pruebas de audio usan un elemento `<audio>` simulado.
 - La clave de TheSportsDB es la gratuita (`3`); CoinGecko puede limitar peticiones.

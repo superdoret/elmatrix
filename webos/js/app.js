@@ -60,15 +60,7 @@
 
   // ---- music ----
   var soundHint = document.getElementById('sound-hint');
-  function applyAudio() {
-    if (!audio) return;
-    audio.setEnabled(!!settings.global.music_enabled);
-    audio.setVolume(settings.global.music_volume / 100);
-    audio.setSource(settings.global.music_source);
-    audio.setStation(settings.global.music_station);
-    audio.setChristmasSource(settings.global.christmas_source);
-    audio.setLevels(settings.global.station_levels);
-  }
+  function applyAudio() { if (audio) E.audio.applySettings(audio, settings.global); }
   function updateSoundHint() {
     if (soundHint) soundHint.hidden = !(audio && audio.available && audio.needsGesture && settings.global.music_enabled);
   }
@@ -216,6 +208,7 @@
     var widget = E.widgets[id];
     if (!widget) return Promise.reject(new Error('unknown widget ' + id));
     var cfg = settings.widgets[id] ? settings.widgets[id].config : {};
+    if (id === 'navidad' && params.get('scene')) { cfg = Object.assign({}, cfg, { scene_only: params.get('scene') }); } // dev/test: one scene only
     var fb = renderer.fb;
     fb.clear(0);
     var ctx = E.context.createContext({

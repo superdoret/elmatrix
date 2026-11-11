@@ -22,7 +22,7 @@
   // Bundled MP3s are rendered at about -16 LUFS (see tools/render-music.js), close to Kiss FM: no trim needed.
   var FILE_TRIMS = { ambient: 1.0, christmas: 1.0 };
   var LEVEL_KEYS = ['bundled'];   // per-source user level keys besides station ids
-  var DEFAULTS = { ambient: 'dronezone', christmas: 'christmas' };
+  var DEFAULTS = { ambient: 'kissfm', christmas: 'christmas' };
 
   function byId(id) { for (var i = 0; i < STATIONS.length; i++) if (STATIONS[i].id === id) return STATIONS[i]; return null; }
   function ofKind(kind) { return STATIONS.filter(function (s) { return s.kind === kind; }); }
