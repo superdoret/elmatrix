@@ -1,8 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert');
 require('./load.js');
-const T = require('../js/music/theory.js');
-const C = require('../js/music/carols.js');
+const T = require('../tools/music/theory.js');
+const C = require('../tools/music/carols.js');
 
 test('noteNum / midiToFreq', () => {
   assert.strictEqual(T.noteNum('C4'), 60);

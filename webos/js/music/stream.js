@@ -16,7 +16,8 @@
 
   function backoffMs(failures) { return Math.min(BACKOFF_CAP, 2000 * Math.pow(2, Math.max(0, failures - 1))); }
 
-  /* deps: {url, createElement(), timers:{setTimeout, clearTimeout}, isOnline(), onChange(state, info)} */
+  /* deps: {url, createElement(), timers:{setTimeout, clearTimeout}, isOnline(), onChange(state, info),
+   *        onElement(el)?, loop? (bundled files), maxFailures? (default 3)} */
   function StreamPlayer(deps) {
     this.d = deps;
     this.state = 'idle';
@@ -25,6 +26,7 @@
     this.el = null;
     this.timers = { watchdog: null, retry: null, stall: null };
     this.listeners = null;
+    this.gen = 0;               // bumped by stop(): timers scheduled before a stop() must not fire after it
   }
 
   StreamPlayer.prototype._emit = function (state, info) {
@@ -61,6 +63,7 @@
     this.el = el;
     el.crossOrigin = 'anonymous';
     el.preload = 'none';
+    if (this.d.loop) el.loop = true;
     if (this.d.onElement) { try { this.d.onElement(el); } catch (e3) { /* routing is optional */ } }
     this.listeners = {
       playing: function () { self._onPlaying(); },
@@ -68,7 +71,7 @@
       error: function () { self._failure('error'); },
       stalled: function () { self._stallWatch(); },
       waiting: function () { self._stallWatch(); },
-      ended: function () { self._failure('ended'); }
+      ended: function () { if (self.d.loop) { try { el.currentTime = 0; self._play(); } catch (e4) { self._failure('ended'); } } else self._failure('ended'); }
     };
     Object.keys(this.listeners).forEach(function (t) { el.addEventListener(t, self.listeners[t]); });
     this._emit('connecting', { fallback: this.fallback });
@@ -124,19 +127,23 @@
     var self = this;
     this._teardown(); this._clear('stall'); this._clear('retry');
     this.failures++;
-    if (this.fallback) { // already on the synth: just keep trying quietly in the background
+    var gen = this.gen;
+    if (this.fallback) { // already on the fallback: just keep trying quietly in the background
       this._emit('fallback', { reason: reason, background: true });
+      if (this.gen !== gen) return; // the owner stopped this player in its callback
       this.timers.retry = this.d.timers.setTimeout(function () { self.timers.retry = null; self.start(); }, BG_RETRY);
       return;
     }
-    if (this.failures >= MAX_FAILURES || !this._online()) {
+    if (this.failures >= (this.d.maxFailures || MAX_FAILURES) || !this._online()) {
       this.fallback = true;
       this._emit('fallback', { reason: reason, failures: this.failures });
+      if (this.gen !== gen) return;
       this.timers.retry = this.d.timers.setTimeout(function () { self.timers.retry = null; self.start(); }, BG_RETRY);
       return;
     }
     var delay = backoffMs(this.failures);
     this._emit('backoff', { reason: reason, delay: delay, failures: this.failures });
+    if (this.gen !== gen) return;
     this.timers.retry = this.d.timers.setTimeout(function () { self.timers.retry = null; self.start(); }, delay);
   };
 
@@ -146,6 +153,7 @@
   };
 
   StreamPlayer.prototype.stop = function () {
+    this.gen++;
     this._clear('retry'); this._teardown(); this._clear('stall');
     this.failures = 0; this.fallback = false;
     this.state = 'idle';

@@ -1,325 +1,241 @@
-/* Audio engine: Web Audio rendering layer for the generative music (js/music/*).
- * Graph: voices -> track bus -> master gain -> compressor -> destination, with a generated-impulse
- * reverb and a feedback delay as sends, and an AnalyserNode tap for the visualizer.
- * Written for Chromium 38: webkitAudioContext fallback, no suspend/resume (mute = gain), no worklets,
- * no stereo panner, no promise-based decodeAudioData. Every failure degrades to silence, never throws. */
+/* Audio engine. Everything audible goes through ONE <audio> element at a time (webOS 3 / Chromium 38: Web Audio
+ * output is silent on the TV, WAV is unsupported, only MP3 works, and a single media pipeline is safest).
+ *
+ * Sources: 'stream' = SomaFM radio (falls back to the bundled MP3 after repeated failures or when offline),
+ *          'incluida' = bundled MP3 (assets/music/*.mp3, rendered by tools/render-music.js).
+ * Tracks: 'ambient' (default) and 'christmas'. A widget asks for a track with setTrack(); setTrack(null) restores
+ * the default. Transitions are sequential: fade the current element out, swap, fade the new one in (element.volume).
+ * Web Audio is used ONLY as an optional analyser tap for the visualizer (never for playback on TVs). Never throws. */
 (function (g) {
   'use strict';
   var E = g.ELM = g.ELM || {};
 
-  var LOOKAHEAD = 4;        // seconds of music scheduled in advance
-  var PUMP_MS = 400;
-  var CROSSFADE = 3;        // seconds
-  var MASTER_SCALE = 0.7;   // volume 1.0 maps to this master gain (headroom)
-  var TRACKS = { ambient: { reverb: 0.55, delay: 0.22 }, christmas: { reverb: 0.8, delay: 0.3 } };
-
-  // ---- pure helpers ----------------------------------------------------------
-  /* Impulse response channel data: decaying noise (exponent controls the tail shape). */
-  function buildImpulse(length, decayPower, rng) {
-    var out = new Float32Array(length);
-    for (var i = 0; i < length; i++) out[i] = (rng() * 2 - 1) * Math.pow(1 - i / length, decayPower);
-    return out;
-  }
+  var FADE_OUT = 1.5, FADE_IN = 2.5, STEP_MS = 100;
+  var RECOVER_MS = 180000;     // retry the radio this often while playing the bundled fallback
+  var SILENCE_MS = 2000;       // analyser all zeros this long = report "no real spectrum"
 
   function clamp01(v) { v = Number(v); return v !== v ? 0 : Math.max(0, Math.min(1, v)); }
 
-  // Ramp a param from its current value (no jump): used for gain changes.
-  function rampTo(param, value, now, secs) {
-    if (param.cancelScheduledValues) param.cancelScheduledValues(now);
-    param.setValueAtTime(param.value, now);
-    param.linearRampToValueAtTime(value, now + secs);
-  }
-
-  // ---- voices -----------------------------------------------------------------
-  // Every envelope starts at 0 and ends at 0 with linear ramps: no clicks.
-  function playPad(ctx, dest, t, notes, dur, vel, o) {
-    o = o || {};
-    var attack = o.attack || 2.5, release = o.release || 3.5, end = t + dur + release;
-    var env = ctx.createGain(), lp = ctx.createBiquadFilter();
-    lp.type = 'lowpass'; lp.frequency.value = o.cutoff || 900; lp.Q.value = 0.6;
-    var peak = vel * 0.8 / Math.max(2, notes.length);
-    env.gain.setValueAtTime(0, t);
-    env.gain.linearRampToValueAtTime(peak, t + attack);
-    env.gain.setValueAtTime(peak, t + Math.max(dur, attack));
-    env.gain.linearRampToValueAtTime(0, end);
-    lp.connect(env); env.connect(dest);
-    var T = E.theory;
-    notes.forEach(function (m) {
-      var f = T.midiToFreq(m);
-      [['triangle', 0.997], ['sine', 1.003]].forEach(function (layer) {
-        var osc = ctx.createOscillator();
-        osc.type = layer[0]; osc.frequency.value = f * layer[1];
-        osc.connect(lp); osc.start(t); osc.stop(end + 0.1);
-      });
-    });
-  }
-
-  // Plucked (sine + octave) or bell/music-box (inharmonic partial) note with exponential-like decay.
-  function playPluck(ctx, dest, t, midi, dur, vel, bell) {
-    var f = E.theory.midiToFreq(midi), end = t + dur;
-    var env = ctx.createGain();
-    env.gain.setValueAtTime(0, t);
-    env.gain.linearRampToValueAtTime(vel * 0.5, t + 0.012);
-    env.gain.linearRampToValueAtTime(vel * 0.12, t + Math.min(0.4, dur * 0.3));
-    env.gain.linearRampToValueAtTime(0, end);
-    env.connect(dest);
-    var partials = bell ? [[1, 1], [2.76, 0.28], [5.4, 0.1]] : [[1, 1], [2, 0.25]];
-    partials.forEach(function (p) {
-      var osc = ctx.createOscillator(), pg = ctx.createGain();
-      osc.type = 'sine'; osc.frequency.value = f * p[0];
-      pg.gain.setValueAtTime(0, t);
-      pg.gain.linearRampToValueAtTime(p[1], t + 0.012);
-      pg.gain.linearRampToValueAtTime(0, t + dur * (p[0] === 1 ? 1 : 0.45));
-      osc.connect(pg); pg.connect(env);
-      osc.start(t); osc.stop(end + 0.1);
-    });
-  }
-
-  function scheduleBlock(ctx, bus, base, block) {
-    block.events.forEach(function (ev) {
-      var t = base + ev.t;
-      if (ev.kind === 'pad') playPad(ctx, bus, t, ev.notes, ev.dur, ev.vel, { attack: ev.attack, release: ev.release, cutoff: ev.cutoff });
-      else playPluck(ctx, bus, t, ev.notes[0], ev.dur, ev.vel, ev.kind === 'bell');
-    });
-  }
-
-  // ---- engine ---------------------------------------------------------------------
-  /* opts: {AudioContext (override, null = unavailable), seed, source, station, christmasSource,
-   *        timers:{setInterval, clearInterval, setTimeout, clearTimeout}, createElement(), isOnline(), onStatus}
-   * Sources: 'stream' = SomaFM radio through an <audio> element (synth = automatic fallback),
-   *          'synth' = procedural music only. The christmas track is the synthesized carols unless
-   *          christmasSource === 'radio'. */
+  /* opts: {source, station, christmasSource, createElement(), isOnline(), probe(url, cb(ok)), now(),
+   *        timers:{setInterval, clearInterval, setTimeout, clearTimeout}, AudioContext (analyser only; null = none),
+   *        analyser (bool, default true), onStatus} */
   function createEngine(opts) {
     opts = opts || {};
-    var Ctor = opts.AudioContext !== undefined ? opts.AudioContext : (g.AudioContext || g.webkitAudioContext || null);
     var timers = opts.timers || {
-      setInterval: function (f, ms) { return setInterval(f, ms); }, clearInterval: function (t) { clearInterval(t); },
-      setTimeout: function (f, ms) { return setTimeout(f, ms); }, clearTimeout: function (t) { clearTimeout(t); }
+      setTimeout: function (f, ms) { return setTimeout(f, ms); }, clearTimeout: function (t) { clearTimeout(t); },
+      setInterval: function (f, ms) { return setInterval(f, ms); }, clearInterval: function (t) { clearInterval(t); }
     };
     var createElement = opts.createElement || (typeof g.Audio === 'function' ? function () { return new g.Audio(); } : null);
     var isOnline = opts.isOnline || function () { return !(typeof navigator !== 'undefined' && navigator.onLine === false); };
-    var rng = E.theory.mulberry32(opts.seed);
-    var ctx = null, nodes = null, timer = null, active = null, gens = {}, muteTimer = null;
+    var now = opts.now || function () { return Date.now(); };
+    var Ctor = opts.analyser === false ? null : (opts.AudioContext !== undefined ? opts.AudioContext : (g.AudioContext || g.webkitAudioContext || null));
+    var probe = opts.probe || defaultProbe;
+    var ST = null;
+    var ctx = null, analyser = null;
+    var cur = null;              // {name, role:'primary'|'fallback', kind:'stream'|'file', player, level, fadeTimer, recoverTimer}
+    var swapping = false, pendingBegin = null, muteTimer = null, started = false, silentSince = 0;
     var eng = {
-      available: false, webAudio: false, enabled: true, volume: 0.35, needsGesture: false, defaultTrack: 'ambient', currentTrack: null, error: null,
+      available: false, enabled: true, volume: 0.35, needsGesture: false, defaultTrack: 'ambient', currentTrack: null, error: null,
       source: opts.source || 'stream', station: opts.station || 'dronezone', christmasSource: opts.christmasSource || 'carols',
-      streamState: 'idle', streamBlocked: false, ctxSuspended: false
+      streamState: 'idle', streamBlocked: false, ctxSuspended: false, role: 'primary'
     };
 
     function status() { if (opts.onStatus) { try { opts.onStatus(eng); } catch (e) { /* ignore */ } } }
-    function level() { return eng.enabled ? eng.volume * MASTER_SCALE : 0; }
     function recomputeGesture() { eng.needsGesture = eng.ctxSuspended || eng.streamBlocked; }
-    function wantsStream(name) { return !!createElement && (name === 'christmas' ? eng.christmasSource === 'radio' : eng.source === 'stream'); }
 
-    function buildGraph() {
-      var c = ctx, n = {};
-      n.master = c.createGain(); n.master.gain.value = 0;
-      n.comp = c.createDynamicsCompressor();
-      n.comp.threshold.value = -20; n.comp.knee.value = 24; n.comp.ratio.value = 6; n.comp.attack.value = 0.01; n.comp.release.value = 0.3;
-      n.master.connect(n.comp); n.comp.connect(c.destination);
-      // analyser tap, kept alive through a silent gain (old engines only pull connected nodes)
-      n.analyser = c.createAnalyser(); n.analyser.fftSize = 1024; n.analyser.smoothingTimeConstant = 0.8;
-      n.tap = c.createGain(); n.tap.gain.value = 0;
-      n.comp.connect(n.analyser); n.analyser.connect(n.tap); n.tap.connect(c.destination);
-      // reverb: generated impulse response
-      n.convolver = c.createConvolver();
-      var len = Math.floor(c.sampleRate * 3.4), buf = c.createBuffer(2, len, c.sampleRate);
-      for (var ch = 0; ch < 2; ch++) buf.getChannelData(ch).set(buildImpulse(len, 2.6, rng));
-      n.convolver.buffer = buf;
-      n.wet = c.createGain(); n.wet.gain.value = 0.8;
-      n.convolver.connect(n.wet); n.wet.connect(n.master);
-      // feedback delay with a darkening filter in the loop
-      n.delay = c.createDelay(2); n.delay.delayTime.value = 0.47;
-      n.fbFilter = c.createBiquadFilter(); n.fbFilter.type = 'lowpass'; n.fbFilter.frequency.value = 1800;
-      n.fb = c.createGain(); n.fb.gain.value = 0.36;
-      n.delay.connect(n.fbFilter); n.fbFilter.connect(n.fb); n.fb.connect(n.delay);
-      n.delayOut = c.createGain(); n.delayOut.gain.value = 0.7;
-      n.delay.connect(n.delayOut); n.delayOut.connect(n.master);
-      nodes = n;
+    // HEAD request to see whether the radio answers (only used while on the fallback, so a dead radio never interrupts the music).
+    function defaultProbe(url, cb) {
+      try {
+        var x = new XMLHttpRequest(), done = false;
+        function finish(ok) { if (!done) { done = true; cb(ok); } }
+        x.open('HEAD', url, true); x.timeout = 8000;
+        x.onload = function () { finish(x.status >= 200 && x.status < 300); };
+        x.onerror = x.ontimeout = function () { finish(false); };
+        x.send(null);
+      } catch (e) { cb(false); }
     }
 
-    function makeBus(name) {
-      var cfg = TRACKS[name], bus = ctx.createGain();
-      bus.gain.setValueAtTime(0, ctx.currentTime);
-      bus.connect(nodes.master);
-      var rv = ctx.createGain(); rv.gain.value = cfg.reverb; bus.connect(rv); rv.connect(nodes.convolver);
-      var dl = ctx.createGain(); dl.gain.value = cfg.delay; bus.connect(dl); dl.connect(nodes.delay);
-      return bus;
+    /* What to play for a track: {primary:{kind,url,loop}, fallback:{...}|null}. */
+    function planFor(name) {
+      ST = ST || E.stations;
+      var file = { kind: 'file', url: ST.fileFor(name), loop: true };
+      var radio = name === 'christmas' ? eng.christmasSource === 'radio' : eng.source === 'stream';
+      if (!radio) return { primary: file, fallback: null };
+      return { primary: { kind: 'stream', url: ST.forTrack(name, eng.station).url, loop: false }, fallback: file };
     }
 
-    function makeGen(name) {
-      if (!gens[name]) gens[name] = name === 'christmas' ? E.carols.createChristmas(Math.floor(rng() * 4294967296)) : E.theory.createAmbient(Math.floor(rng() * 4294967296));
-      return gens[name];
+    // ---- volume: element.volume only (level = fade 0..1 times the master volume) ----
+    function target(slot) { return slot.level * (eng.enabled ? eng.volume : 0); }
+    function applyVolume(slot) {
+      var el = slot && slot.player && slot.player.element();
+      if (el) { try { el.volume = Math.max(0, Math.min(1, target(slot))); } catch (e) { /* ignore */ } }
     }
-
-    // ---- element volume fallback (no Web Audio routing): linear steps with timers ----
-    function elTarget(slot) { return slot.elLevel * (eng.enabled ? eng.volume : 0); }
-    function applyElementVolume(slot) {
-      var el = slot.player && slot.player.element();
-      if (el && slot.elVol) { try { el.volume = Math.max(0, Math.min(1, elTarget(slot))); } catch (e) { /* ignore */ } }
-    }
-    function fadeElement(slot, to, secs) {
-      var from = slot.elLevel, steps = Math.max(1, Math.round(secs * 5)), i = 0;
-      if (slot.fadeTimer) timers.clearTimeout(slot.fadeTimer);
+    function fade(slot, to, secs, done) {
+      if (slot.fadeTimer) { timers.clearTimeout(slot.fadeTimer); slot.fadeTimer = null; }
+      var from = slot.level, steps = Math.max(1, Math.round(secs * 1000 / STEP_MS)), i = 0;
       (function step() {
-        i++; slot.elLevel = from + (to - from) * (i / steps); applyElementVolume(slot);
-        if (i < steps) slot.fadeTimer = timers.setTimeout(step, 200); else slot.fadeTimer = null;
+        i++; slot.level = from + (to - from) * (i / steps); applyVolume(slot);
+        if (i < steps) slot.fadeTimer = timers.setTimeout(step, STEP_MS);
+        else { slot.fadeTimer = null; if (done) done(); }
       })();
     }
-    function fadeStream(slot, to, secs) {
-      if (slot.streamGain) rampTo(slot.streamGain.gain, to, ctx.currentTime, secs);
-      if (slot.elVol || !slot.streamGain) fadeElement(slot, to, secs);
-    }
 
-    function setSynth(slot, on, secs) {
-      if (!nodes || on === slot.synthOn) return;
-      slot.synthOn = on;
-      rampTo(slot.bus.gain, on ? 1 : 0, ctx.currentTime, secs);
-      if (on) slot.cursor = ctx.currentTime + 0.2;
-    }
-
-    function routeElement(slot, el) {
-      slot.elVol = true;
-      if (!nodes) { applyElementVolume(slot); return; }
+    // ---- optional analyser tap (modern browsers only; skipped on TVs by the caller) ----
+    function routeElement(el) {
+      if (!Ctor) return;
       try {
-        var src = ctx.createMediaElementSource(el);
-        src.connect(slot.streamGain);
-        slot.elVol = false;
-        try { el.volume = 1; } catch (e) { /* ignore */ }
-      } catch (e2) { slot.elVol = true; applyElementVolume(slot); }
-    }
-
-    function startStream(slot) {
-      var ST = E.stations, station = ST.forTrack(slot.name, eng.station);
-      slot.streamGain = nodes ? ctx.createGain() : null;
-      if (slot.streamGain) { slot.streamGain.gain.setValueAtTime(0, ctx.currentTime); slot.streamGain.connect(nodes.master); }
-      slot.elLevel = 0; slot.elVol = !nodes;
-      slot.player = new E.stream.StreamPlayer({
-        url: station.url, createElement: createElement, timers: timers, isOnline: isOnline,
-        onElement: function (el) { routeElement(slot, el); },
-        onChange: function (state, info) {
-          if (active === slot) { eng.streamState = state; eng.streamBlocked = state === 'blocked'; recomputeGesture(); }
-          if (state === 'playing') { fadeStream(slot, 1, CROSSFADE); setSynth(slot, false, CROSSFADE); }
-          else if (state === 'fallback') { fadeStream(slot, 0, 1); setSynth(slot, true, CROSSFADE); }
-          if (active === slot) status();
-          void info;
-        }
-      });
-      if (eng.enabled) slot.player.start(); // muted: stay idle (no download) until re-enabled
-    }
-
-    function activate(name) {
-      var now = ctx ? ctx.currentTime : 0, old = active;
-      var slot = { name: name, bus: null, gen: null, cursor: now + 0.2, synthOn: false, player: null, streamGain: null, elLevel: 0, elVol: false, fadeTimer: null };
-      if (nodes) {
-        slot.bus = makeBus(name); slot.gen = makeGen(name);
-        if (!wantsStream(name)) { slot.synthOn = true; slot.bus.gain.linearRampToValueAtTime(1, now + CROSSFADE); }
-      }
-      active = slot;
-      eng.currentTrack = name;
-      eng.streamState = 'idle'; eng.streamBlocked = false;
-      if (wantsStream(name)) startStream(slot);
-      recomputeGesture();
-      if (old) retire(old);
-    }
-
-    function retire(old) {
-      var now = ctx ? ctx.currentTime : 0;
-      if (nodes) {
-        if (old.bus) rampTo(old.bus.gain, 0, now, CROSSFADE);
-        if (old.streamGain) rampTo(old.streamGain.gain, 0, now, CROSSFADE);
-      }
-      if (old.elVol || !nodes) fadeElement(old, 0, CROSSFADE);
-      timers.setTimeout(function () {
-        if (old.player) old.player.stop();
-        try { if (old.bus) old.bus.disconnect(); if (old.streamGain) old.streamGain.disconnect(); } catch (e) { /* ignore */ }
-      }, (CROSSFADE + 0.5) * 1000);
-    }
-
-    function pump() {
-      if (!eng.available || !active) return;
-      if (ctx) {
-        if (ctx.state === 'running' || ctx.state === undefined) { if (eng.ctxSuspended) { eng.ctxSuspended = false; recomputeGesture(); status(); } }
-        if (active.cursor < ctx.currentTime) active.cursor = ctx.currentTime + 0.2; // never schedule in the past
-      }
-      if (!ctx || !active.synthOn || !eng.enabled || eng.needsGesture) return;
-      var horizon = ctx.currentTime + LOOKAHEAD, guard = 0;
-      while (active.cursor < horizon && guard++ < 4) {
-        var block = active.gen.next();
-        try { scheduleBlock(ctx, active.bus, active.cursor, block); } catch (e) { eng.error = e; }
-        active.cursor += block.length;
-      }
-    }
-
-    eng.init = function () {
-      if (ctx || eng.available) return eng.available;
-      if (Ctor) {
-        try {
+        if (!ctx) {
           ctx = new Ctor();
-          buildGraph();
-          eng.webAudio = true;
+          analyser = ctx.createAnalyser(); analyser.fftSize = 1024; analyser.smoothingTimeConstant = 0.8;
+          analyser.connect(ctx.destination);
           eng.ctxSuspended = ctx.state === 'suspended';
-        } catch (e) { eng.error = e; ctx = null; nodes = null; }
-      }
-      eng.available = eng.webAudio || !!createElement; // without Web Audio the radio still plays via element.volume
+          recomputeGesture();
+        }
+        ctx.createMediaElementSource(el).connect(analyser);
+      } catch (e) { eng.error = e; }
+    }
+
+    // ---- players ----
+    function startPlayer(slot, spec, maxFailures) {
+      slot.kind = spec.kind;
+      slot.player = new E.stream.StreamPlayer({
+        url: spec.url, loop: spec.loop, maxFailures: maxFailures, createElement: createElement, timers: timers, isOnline: spec.kind === 'stream' ? isOnline : function () { return true; },
+        onElement: function (el) { try { el.volume = Math.max(0, Math.min(1, target(slot))); } catch (e) { /* ignore */ } routeElement(el); },
+        onChange: function (state) { onPlayerState(slot, state); }
+      });
+      if (eng.enabled) slot.player.start();
+    }
+
+    function onPlayerState(slot, state) {
+      if (cur !== slot) return;
+      eng.streamState = state;
+      eng.streamBlocked = state === 'blocked';
       recomputeGesture();
+      if (state === 'playing') { silentSince = 0; fade(slot, 1, FADE_IN); }
+      else if (state === 'fallback' && slot.kind === 'stream') goFallback(slot);
+      status();
+    }
+
+    // Radio gave up: stop it (one element at a time) and play the bundled file, then retry the radio quietly.
+    function goFallback(slot) {
+      if (slot.player) slot.player.stop();
+      var plan = planFor(slot.name);
+      slot.level = 0;
+      slot.role = 'fallback'; eng.role = 'fallback';
+      if (plan.fallback) { startPlayer(slot, plan.fallback, 3); scheduleRecover(slot); }
+      else scheduleRecover(slot);
+    }
+
+    function scheduleRecover(slot) {
+      if (slot.recoverTimer) timers.clearTimeout(slot.recoverTimer);
+      slot.recoverTimer = timers.setTimeout(function () {
+        slot.recoverTimer = null;
+        if (cur !== slot || slot.role !== 'fallback' || !eng.enabled) { if (cur === slot && slot.role === 'fallback') scheduleRecover(slot); return; }
+        if (!isOnline()) { scheduleRecover(slot); return; }
+        var plan = planFor(slot.name);
+        probe(plan.primary.url, function (ok) {
+          if (cur !== slot || slot.role !== 'fallback') return;
+          if (!ok) { scheduleRecover(slot); return; }
+          // radio answers: sequential swap file -> radio (one quick attempt; failure returns to the file)
+          fade(slot, 0, FADE_OUT, function () {
+            if (cur !== slot) return;
+            slot.player.stop(); slot.role = 'primary'; eng.role = 'primary'; slot.level = 0;
+            startPlayer(slot, plan.primary, 1);
+          });
+        });
+      }, RECOVER_MS);
+    }
+
+    function begin(name) {
+      var plan = planFor(name);
+      var slot = { name: name, role: 'primary', kind: plan.primary.kind, player: null, level: 0, fadeTimer: null, recoverTimer: null };
+      cur = slot; eng.currentTrack = name; eng.role = 'primary'; eng.streamState = 'idle'; eng.streamBlocked = false;
+      startPlayer(slot, plan.primary, undefined);
+      recomputeGesture();
+      status();
+    }
+
+    function teardown(slot) {
+      if (slot.fadeTimer) timers.clearTimeout(slot.fadeTimer);
+      if (slot.recoverTimer) timers.clearTimeout(slot.recoverTimer);
+      slot.fadeTimer = slot.recoverTimer = null;
+      if (slot.player) slot.player.stop();
+    }
+
+    /* Sequential transition: fade out the current element, tear it down, then begin the next track. The latest
+     * request wins if several arrive during the fade-out. */
+    function transition(beginFn) {
+      if (!cur) { beginFn(); return; }
+      pendingBegin = beginFn;
+      if (swapping) return;
+      swapping = true;
+      var old = cur;
+      var finish = function () {
+        teardown(old); swapping = false;
+        var fn = pendingBegin; pendingBegin = null; cur = null;
+        if (fn) fn();
+      };
+      if (old.player && old.player.element() && eng.enabled) fade(old, 0, FADE_OUT, finish); else finish();
+    }
+
+    // ---- public API ----
+    eng.init = function () {
+      if (eng.available) return true;
+      eng.available = !!createElement && !!(E.stream && E.stations);
       status();
       return eng.available;
     };
 
     eng.start = function () {
-      if (!eng.available || timer !== null) return;
-      if (nodes) rampTo(nodes.master.gain, level(), ctx.currentTime, 1.2);
-      activate(eng.defaultTrack);
-      pump();
-      if (nodes) timer = timers.setInterval(pump, PUMP_MS); else timer = -1;
+      if (!eng.available || started) return;
+      started = true;
+      eng.currentTrack = eng.defaultTrack;
+      begin(eng.defaultTrack);
       if (typeof g.addEventListener === 'function' && !eng._onlineHook) {
-        eng._onlineHook = function () { if (active && active.player) active.player.retryNow(); };
+        eng._onlineHook = function () { if (cur && cur.role === 'fallback' && cur.recoverTimer) { timers.clearTimeout(cur.recoverTimer); cur.recoverTimer = null; scheduleRecover(cur); } };
         try { g.addEventListener('online', eng._onlineHook); } catch (e) { /* ignore */ }
       }
     };
 
     eng.setTrack = function (name) {
-      var wanted = (name && TRACKS[name]) ? name : eng.defaultTrack;
-      if (!eng.available || !active || active.name === wanted) return;
-      activate(wanted);
-      pump();
+      var wanted = (name === 'christmas') ? 'christmas' : eng.defaultTrack;
+      if (!eng.available || !started) return;
+      if (!swapping && cur && cur.name === wanted) return;
+      if (swapping && pendingBegin && eng._pendingName === wanted) return;
+      eng._pendingName = wanted;
+      transition(function () { eng._pendingName = null; begin(wanted); });
     };
 
-    // Re-create the current track after the source or the station changed (crossfades).
-    function refresh() { if (eng.available && active) { activate(active.name); pump(); } }
-    eng.setSource = function (v) { v = v === 'synth' ? 'synth' : 'stream'; if (v !== eng.source) { eng.source = v; refresh(); } };
-    eng.setStation = function (id) { if (id && id !== eng.station) { eng.station = id; if (active && active.name === 'ambient' && eng.source === 'stream') refresh(); } };
-    eng.setChristmasSource = function (v) { v = v === 'radio' ? 'radio' : 'carols'; if (v !== eng.christmasSource) { eng.christmasSource = v; if (active && active.name === 'christmas') refresh(); } };
+    function refresh() { if (eng.available && started && cur) { var n = cur.name; eng._pendingName = n; transition(function () { eng._pendingName = null; begin(n); }); } }
+    eng.setSource = function (v) { v = v === 'incluida' ? 'incluida' : 'stream'; if (v !== eng.source) { eng.source = v; if (cur && cur.name === 'ambient') refresh(); } };
+    eng.setStation = function (id) { if (id && id !== eng.station) { eng.station = id; if (cur && cur.name === 'ambient' && eng.source === 'stream') refresh(); } };
+    eng.setChristmasSource = function (v) { v = v === 'radio' ? 'radio' : 'carols'; if (v !== eng.christmasSource) { eng.christmasSource = v; if (cur && cur.name === 'christmas') refresh(); } };
 
     eng.setEnabled = function (on) {
       eng.enabled = !!on;
-      if (nodes) rampTo(nodes.master.gain, level(), ctx.currentTime, 0.5);
-      if (active) {
-        applyElementVolume(active);
-        if (muteTimer !== null) { timers.clearTimeout(muteTimer); muteTimer = null; }
+      if (muteTimer !== null) { timers.clearTimeout(muteTimer); muteTimer = null; }
+      if (cur) {
         if (!eng.enabled) {
-          // stop downloading while muted (after the fade-out)
-          muteTimer = timers.setTimeout(function () { muteTimer = null; if (!eng.enabled && active && active.player) active.player.stop(); }, 700);
-        } else if (active.player && active.player.state === 'idle') active.player.start();
+          applyVolume(cur); // volume 0 right away; stop downloading shortly after
+          muteTimer = timers.setTimeout(function () { muteTimer = null; if (!eng.enabled && cur && cur.player) cur.player.stop(); }, 700);
+        } else {
+          applyVolume(cur);
+          if (cur.player && cur.player.state === 'idle') cur.player.start();
+        }
       }
       status();
     };
 
-    eng.setVolume = function (v) {
-      eng.volume = clamp01(v);
-      if (nodes) rampTo(nodes.master.gain, level(), ctx.currentTime, 0.3);
-      if (active) applyElementVolume(active);
-    };
+    eng.setVolume = function (v) { eng.volume = clamp01(v); if (cur) applyVolume(cur); };
 
-    /* Call from a user gesture (key press) when the browser started the context or the stream suspended. */
+    /* Key press: start playback if the browser blocked autoplay, resume the analyser context. */
     eng.unlock = function () {
       if (!eng.available || !eng.needsGesture) return;
       try {
-        if (active && active.player) active.player.kick();
+        if (cur && cur.player) cur.player.kick();
         if (ctx && typeof ctx.resume === 'function') {
           var p = ctx.resume();
-          if (p && p.then) p.then(function () { eng.ctxSuspended = ctx.state === 'suspended'; recomputeGesture(); status(); }, function () { /* stay silent */ });
+          if (p && p.then) p.then(function () { eng.ctxSuspended = ctx.state === 'suspended'; recomputeGesture(); status(); }, function () { /* ignore */ });
         }
         eng.ctxSuspended = !!ctx && ctx.state === 'suspended' && typeof ctx.resume !== 'function';
         eng.streamBlocked = false; recomputeGesture();
@@ -327,32 +243,39 @@
       status();
     };
 
-    /* Fills `arr` (Uint8Array, length = frequencyBinCount) with the current spectrum. Returns false when there is
-     * no real signal source (audio off/unavailable/suspended), so callers can simulate one. */
+    /* Real spectrum into `arr`, or false when there is no trustworthy one (no analyser, audio off or blocked,
+     * the track is not playing, or the analyser has read only zeros for ~2 s) so the visualizer simulates. */
     eng.getSpectrum = function (arr) {
-      if (!nodes || !eng.enabled || eng.needsGesture || !nodes.analyser.getByteFrequencyData) return false;
-      try { nodes.analyser.getByteFrequencyData(arr); return true; } catch (e) { return false; }
+      if (!analyser || !eng.enabled || eng.needsGesture || !cur || eng.streamState !== 'playing' || !analyser.getByteFrequencyData) return false;
+      try {
+        analyser.getByteFrequencyData(arr);
+        var peak = 0;
+        for (var i = 0; i < arr.length; i++) if (arr[i] > peak) peak = arr[i];
+        var t = now();
+        if (peak > 0) { silentSince = 0; return true; }
+        if (!silentSince) silentSince = t;
+        return t - silentSince < SILENCE_MS; // brief silence is real; a long run of zeros is a dead tap
+      } catch (e) { return false; }
     };
-    eng.binCount = function () { return nodes ? nodes.analyser.frequencyBinCount : 0; };
+    eng.binCount = function () { return analyser ? analyser.frequencyBinCount : 0; };
+
     /* Short Spanish description of what is playing, for the settings screen. */
     eng.describe = function () {
       if (!eng.available) return 'sin audio';
-      var radio = active && active.player;
-      if (!radio) return 'música sintetizada';
-      var st = radio.state;
-      if (st === 'playing') return 'radio en línea';
-      if (st === 'fallback') return 'sin conexión: música sintetizada';
+      if (!cur || !cur.player) return 'en pausa';
+      var st = cur.player.state, fb = cur.role === 'fallback';
       if (st === 'blocked') return 'pulsa una tecla para activar el sonido';
       if (st === 'idle') return 'en pausa';
+      if (cur.kind === 'file') return fb ? 'sin conexión: música incluida' : 'música incluida';
+      if (st === 'playing') return 'radio en línea';
       return 'conectando…';
     };
-    eng.pump = pump;
-    eng.dispose = function () { if (timer !== null && timer !== -1) timers.clearInterval(timer); timer = null; if (active && active.player) active.player.stop(); };
-    eng._debug = function () { return { ctx: ctx, nodes: nodes, active: active }; };
+    eng.dispose = function () { if (cur) teardown(cur); cur = null; };
+    eng._debug = function () { return { ctx: ctx, analyser: analyser, cur: cur, swapping: swapping }; };
     return eng;
   }
 
-  var api = { createEngine: createEngine, buildImpulse: buildImpulse, rampTo: rampTo, playPad: playPad, playPluck: playPluck, CROSSFADE: CROSSFADE, LOOKAHEAD: LOOKAHEAD, TRACKS: TRACKS };
+  var api = { createEngine: createEngine, FADE_OUT: FADE_OUT, FADE_IN: FADE_IN, RECOVER_MS: RECOVER_MS, SILENCE_MS: SILENCE_MS };
   E.audio = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : global);

@@ -1,218 +1,288 @@
 const test = require('node:test');
 const assert = require('node:assert');
 require('./load.js');
+const ST = require('../js/music/stations.js');
+const SP = require('../js/music/stream.js');
 const A = require('../js/audio.js');
-const { FakeAudioContext } = require('./fakeaudio.js');
+const { FakeClock, FakeAudio } = require('./fakeclock.js');
 
-const { FakeClock } = require('./fakeclock.js');
-function fakeTimers() { return new FakeClock(); }
-function make(extra) {
-  const timers = fakeTimers();
-  const eng = A.createEngine(Object.assign({ AudioContext: FakeAudioContext, seed: 1, timers, source: 'synth', createElement: null }, extra));
-  return { eng, timers };
+function engine(extra) {
+  FakeAudio.all.length = 0;
+  const clock = new FakeClock(), online = { v: true }, probes = [];
+  const eng = A.createEngine(Object.assign({
+    timers: clock, source: 'stream', createElement: () => new FakeAudio(), isOnline: () => online.v, analyser: false,
+    probe: (url, cb) => probes.push({ url, cb })
+  }, extra));
+  return { eng, clock, online, probes, els: FakeAudio.all, live: () => FakeAudio.all.filter(e => !e.paused) };
 }
+const MP3_AMBIENT = 'assets/music/ambient.mp3', MP3_XMAS = 'assets/music/christmas.mp3';
 
-test('without AudioContext the engine is silent but never throws', () => {
-  const eng = A.createEngine({ AudioContext: null });
+test('stations: bundled file table', () => {
+  assert.strictEqual(ST.fileFor('ambient'), MP3_AMBIENT);
+  assert.strictEqual(ST.fileFor('christmas'), MP3_XMAS);
+  assert.strictEqual(ST.fileFor(null), MP3_AMBIENT);
+});
+
+test('no audio element available -> unavailable, silent, never throws', () => {
+  const eng = A.createEngine({ createElement: null, analyser: false, timers: new FakeClock() });
   assert.strictEqual(eng.init(), false);
-  assert.strictEqual(eng.available, false);
-  assert.doesNotThrow(() => { eng.start(); eng.setTrack('christmas'); eng.setEnabled(false); eng.setVolume(0.5); eng.unlock(); eng.pump(); });
-  assert.strictEqual(eng.getSpectrum(new Uint8Array(8)), false);
-});
-
-test('a throwing AudioContext constructor degrades to silence', () => {
-  const eng = A.createEngine({ AudioContext: function () { throw new Error('denied'); } });
-  assert.strictEqual(eng.init(), false);
-  assert.doesNotThrow(() => eng.start());
-});
-
-test('graph: voices -> bus -> master -> compressor -> destination, with reverb, delay and analyser taps', () => {
-  const { eng } = make();
-  assert.ok(eng.init());
-  eng.start();
-  const d = eng._debug(), n = d.nodes, ctx = d.ctx;
-  assert.ok(n.master.out.includes(n.comp));
-  assert.ok(n.comp.out.includes(ctx.destination));
-  assert.ok(n.comp.out.includes(n.analyser));
-  assert.ok(n.analyser.out.includes(n.tap) && n.tap.out.includes(ctx.destination)); // analyser kept alive, silent
-  assert.strictEqual(n.tap.gain.value, 0);
-  assert.ok(n.convolver.buffer && n.convolver.buffer.length > ctx.sampleRate * 3);
-  assert.ok(n.convolver.out.includes(n.wet) && n.wet.out.includes(n.master));
-  assert.ok(n.delay.out.includes(n.fbFilter) && n.fb.out.includes(n.delay)); // feedback loop
-  assert.ok(n.fb.gain.value < 0.6, 'stable feedback');
-  assert.ok(d.active.bus.out.includes(n.master) && d.active.bus.out.length === 3);
-  assert.ok(n.comp.ratio.value > 1);
-});
-
-test('impulse response decays towards zero', () => {
-  const ir = A.buildImpulse(4000, 2.6, () => 0.9);
-  const head = Math.max.apply(null, Array.from(ir.slice(0, 200)).map(Math.abs));
-  const tail = Math.max.apply(null, Array.from(ir.slice(3800)).map(Math.abs));
-  assert.ok(head > 0.5 && tail < 0.02);
-});
-
-function pumpUntil(eng, ctx, seconds) {
-  for (let t = 0; t <= seconds; t += 0.4) { ctx.currentTime = t; eng.pump(); }
-}
-
-test('all scheduled notes start in the future, end within bounds, with finite frequencies', () => {
-  const { eng } = make();
-  eng.init(); eng.start();
-  const ctx = eng._debug().ctx;
-  pumpUntil(eng, ctx, 120);
-  const oscs = ctx.of('osc');
-  assert.ok(oscs.length > 50);
-  oscs.forEach(o => {
-    assert.ok(o.started !== null && o.stopped !== null, 'started and stopped');
-    assert.ok(o.started >= 0 && o.stopped > o.started, 'order');
-    assert.ok(Number.isFinite(o.frequency.value) && o.frequency.value > 20 && o.frequency.value < 8000);
-  });
-  // music is scheduled at most one block (+ lookahead) ahead of the clock
-  const maxStart = Math.max.apply(null, oscs.map(o => o.started));
-  assert.ok(maxStart < 120 + A.LOOKAHEAD + 25, 'scheduled too far ahead: ' + maxStart);
-});
-
-test('no clicks: every envelope gain starts at 0, ramps, and ends at 0', () => {
-  const { eng } = make();
-  eng.init(); eng.start();
-  const ctx = eng._debug().ctx;
-  pumpUntil(eng, ctx, 60);
-  const envs = ctx.of('gain').filter(g => g.gain.events.some(e => e.type === 'ramp') && g.gain.events.length >= 3 && g.gain.events[0].value === 0 && g.gain.events[0].type === 'set');
-  assert.ok(envs.length > 20);
-  envs.forEach(g => {
-    const ev = g.gain.events.filter(e => e.type !== 'cancel');
-    assert.strictEqual(ev[0].type, 'set'); assert.strictEqual(ev[0].value, 0);
-    const last = ev[ev.length - 1];
-    assert.strictEqual(last.type, 'ramp');
-    assert.strictEqual(last.value, 0);
-    // times never go backwards for ramps
-    const times = ev.map(e => e.time);
-    for (let i = 1; i < times.length; i++) assert.ok(times[i] >= times[i - 1] - 1e-9);
-  });
-});
-
-test('gain changes (master, mute, volume, buses) always set the current value before ramping', () => {
-  const { eng } = make();
-  eng.init(); eng.start();
-  const ctx = eng._debug().ctx, master = eng._debug().nodes.master.gain;
-  ctx.currentTime = 2; eng.setVolume(0.8); ctx.currentTime = 4; eng.setEnabled(false); ctx.currentTime = 6; eng.setEnabled(true);
-  const ev = master.events.filter(e => e.type !== 'assign');
-  ev.forEach((e, i) => { if (e.type === 'ramp') { assert.ok(i > 0); const prev = ev[i - 1]; assert.ok(prev.type === 'set' || prev.type === 'cancel' || prev.type === 'ramp', 'ramp preceded by an anchor'); } });
-  // anchored: each ramp is preceded by a set of the previous value (no jump)
-  for (let i = 0; i < ev.length; i++) if (ev[i].type === 'ramp') { const anchor = ev[i - 1]; assert.strictEqual(anchor.type, 'set'); }
-});
-
-test('mute ramps master to 0 and stops scheduling; unmute restores and resumes without a burst', () => {
-  const { eng } = make();
-  eng.init(); eng.start();
-  const d = eng._debug(), ctx = d.ctx;
-  pumpUntil(eng, ctx, 30);
-  const before = ctx.of('osc').length;
-  ctx.currentTime = 31; eng.setEnabled(false);
-  const lastRamp = d.nodes.master.gain.events.filter(e => e.type === 'ramp').pop();
-  assert.strictEqual(lastRamp.value, 0);
-  assert.ok(lastRamp.time > 31 && lastRamp.time <= 31.6, 'smooth ramp');
-  pumpUntil(eng, ctx, 200); // time passes while muted (pump from t=0 is fine: cursor catches up)
-  ctx.currentTime = 200; eng.pump();
-  assert.strictEqual(ctx.of('osc').length, before, 'no new notes while muted');
-  ctx.currentTime = 201; eng.setEnabled(true);
-  eng.pump();
-  assert.ok(d.nodes.master.gain.events.filter(e => e.type === 'ramp').pop().value > 0);
-  assert.ok(ctx.of('osc').length > before, 'music resumes');
-  const starts = ctx.of('osc').slice(before).map(o => o.started);
-  assert.ok(Math.min.apply(null, starts) >= 201, 'resumed notes start now, not in the past');
-});
-
-test('volume is clamped and mapped to master gain', () => {
-  const { eng } = make();
-  eng.init(); eng.start();
-  eng.setVolume(5); assert.strictEqual(eng.volume, 1);
-  eng.setVolume(-1); assert.strictEqual(eng.volume, 0);
-  eng.setVolume('abc'); assert.strictEqual(eng.volume, 0);
-  eng.setVolume(0.5);
-  const last = eng._debug().nodes.master.gain.events.filter(e => e.type === 'ramp').pop();
-  assert.ok(last.value > 0 && last.value < 0.5);
-});
-
-test('setTrack crossfades: new bus ramps 0->1, old bus ramps to 0 over ~3 s, then is disconnected', () => {
-  const { eng, timers } = make();
-  eng.init(); eng.start();
-  const ctx = eng._debug().ctx;
-  pumpUntil(eng, ctx, 10);
-  const oldBus = eng._debug().active.bus;
-  ctx.currentTime = 10; eng.setTrack('christmas');
-  const nb = eng._debug().active.bus;
-  assert.notStrictEqual(nb, oldBus);
-  assert.strictEqual(eng.currentTrack, 'christmas');
-  const up = nb.gain.events.filter(e => e.type === 'ramp').pop();
-  assert.deepStrictEqual([up.value, up.time], [1, 10 + A.CROSSFADE]);
-  assert.strictEqual(nb.gain.events[0].value, 0);
-  const down = oldBus.gain.events.filter(e => e.type === 'ramp').pop();
-  assert.deepStrictEqual([down.value, down.time], [0, 10 + A.CROSSFADE]);
-  const anchor = oldBus.gain.events[oldBus.gain.events.length - 2];
-  assert.strictEqual(anchor.type, 'set'); assert.strictEqual(anchor.time, 10);
-  assert.strictEqual(oldBus.disconnected, false);
-  timers.advance(4000);
-  assert.strictEqual(oldBus.disconnected, true);
-  // same track again: no-op
-  const buses = ctx.of('gain').length;
-  eng.setTrack('christmas');
-  assert.strictEqual(ctx.of('gain').length, buses);
-  // null and unknown names go back to the default
-  eng.setTrack(null); assert.strictEqual(eng.currentTrack, 'ambient');
-  eng.setTrack('nope'); assert.strictEqual(eng.currentTrack, 'ambient');
-});
-
-test('christmas track schedules bell notes through its own bus; ambient resumes its own generator', () => {
-  const { eng } = make();
-  eng.init(); eng.start();
-  const ctx = eng._debug().ctx;
-  ctx.currentTime = 5; eng.setTrack('christmas');
-  const bus = eng._debug().active.bus;
-  pumpUntil(eng, ctx, 40);
-  assert.ok(bus.out.length === 3);
-  const before = ctx.of('osc').length;
-  ctx.currentTime = 60; eng.setTrack(null); pumpUntil(eng, ctx, 90);
-  assert.ok(ctx.of('osc').length > before);
-});
-
-test('autoplay: a suspended context waits for a gesture, schedules nothing, then unlock resumes', async () => {
-  FakeAudioContext.initialState = 'suspended';
-  const statuses = [];
-  const { eng } = make({ onStatus: e => statuses.push(e.needsGesture) });
-  eng.init();
-  assert.strictEqual(eng.needsGesture, true);
-  eng.start();
-  const ctx = eng._debug().ctx;
-  pumpUntil(eng, ctx, 20);
-  assert.strictEqual(ctx.of('osc').length, 0, 'no music scheduled while suspended');
+  assert.doesNotThrow(() => { eng.start(); eng.setTrack('christmas'); eng.setEnabled(false); eng.setVolume(0.5); eng.unlock(); eng.dispose(); });
   assert.strictEqual(eng.getSpectrum(new Uint8Array(4)), false);
-  eng.unlock();
+  assert.strictEqual(eng.describe(), 'sin audio');
+  const thrower = A.createEngine({ createElement: () => { throw new Error('no Audio'); }, analyser: false, timers: new FakeClock() });
+  assert.doesNotThrow(() => { thrower.init(); thrower.start(); thrower.setTrack('christmas'); thrower.setEnabled(false); thrower.setEnabled(true); });
+});
+
+test('source "incluida": plays the bundled ambient MP3 on a looping element with fade-in, no network', () => {
+  const t = engine({ source: 'incluida' });
+  t.eng.init(); t.eng.start();
+  assert.strictEqual(t.els.length, 1);
+  assert.strictEqual(t.els[0].src, MP3_AMBIENT);
+  assert.strictEqual(t.els[0].loop, true);
+  assert.strictEqual(t.els[0].volume, 0, 'starts silent');
+  t.els[0].emit('playing');
+  t.clock.advance(A.FADE_IN * 1000 + 200);
+  assert.ok(Math.abs(t.els[0].volume - 0.35) < 1e-6, 'fades to the master volume: ' + t.els[0].volume);
+  assert.strictEqual(t.eng.describe(), 'música incluida');
+  // 'ended' on a looping file restarts it instead of failing
+  t.els[0].emit('ended');
+  assert.strictEqual(t.els[0].plays, 2);
+  assert.strictEqual(t.eng.streamState, 'playing');
+  assert.strictEqual(t.probes.length, 0);
+});
+
+test('radio source: connects to the station, loop is off, volume follows fade and master volume', () => {
+  const t = engine();
+  t.eng.init(); t.eng.start();
+  assert.strictEqual(t.els[0].src, ST.byId('dronezone').url);
+  assert.ok(!t.els[0].loop);
+  t.els[0].emit('playing'); t.clock.advance(3000);
+  assert.ok(Math.abs(t.els[0].volume - 0.35) < 1e-6);
+  t.eng.setVolume(0.8); assert.ok(Math.abs(t.els[0].volume - 0.8) < 1e-6);
+  t.eng.setVolume(5); assert.strictEqual(t.els[0].volume, 1);
+  t.eng.setVolume(-1); assert.strictEqual(t.els[0].volume, 0);
+  assert.strictEqual(t.eng.describe(), 'radio en línea');
+});
+
+test('radio failure -> bundled ambient MP3 (one element at a time), then quiet recovery attempts with a probe', () => {
+  const t = engine();
+  t.eng.init(); t.eng.start();
+  t.els[0].emit('error'); t.clock.advance(2000); t.els[1].emit('error'); t.clock.advance(4000); t.els[2].emit('error');
+  const file = t.els[t.els.length - 1];
+  assert.strictEqual(file.src, MP3_AMBIENT);
+  assert.strictEqual(file.loop, true);
+  assert.strictEqual(t.live().length, 1, 'only one element playing');
+  assert.ok(t.els.slice(0, -1).every(e => e.paused && e.src === ''), 'radio elements torn down');
+  file.emit('playing'); t.clock.advance(3000);
+  assert.strictEqual(t.eng.describe(), 'sin conexión: música incluida');
+  assert.ok(Math.abs(file.volume - 0.35) < 1e-6);
+  // no concurrent radio attempts: nothing happens until the recovery timer, and then only a probe
+  const n = t.els.length;
+  t.clock.advance(A.RECOVER_MS - 100); assert.strictEqual(t.els.length, n);
+  t.clock.advance(200); assert.strictEqual(t.probes.length, 1);
+  assert.strictEqual(t.probes[0].url, ST.byId('dronezone').url);
+  assert.strictEqual(t.els.length, n, 'probing creates no element');
+  t.probes[0].cb(false); // radio still unreachable: keep the file, try again later
+  assert.strictEqual(file.paused, false);
+  t.clock.advance(A.RECOVER_MS + 100); assert.strictEqual(t.probes.length, 2);
+  t.probes[1].cb(true); // reachable: sequential swap file -> radio
+  assert.strictEqual(t.live().length, 1, 'file still playing while it fades out');
+  t.clock.advance(A.FADE_OUT * 1000 + 200);
+  assert.strictEqual(file.paused, true);
+  const radio = t.els[t.els.length - 1];
+  assert.strictEqual(radio.src, ST.byId('dronezone').url);
+  assert.strictEqual(t.live().length, 1);
+  radio.emit('playing'); t.clock.advance(3000);
+  assert.strictEqual(t.eng.describe(), 'radio en línea');
+});
+
+test('a failed recovery attempt goes straight back to the bundled file (single attempt)', () => {
+  const t = engine();
+  t.eng.init(); t.eng.start();
+  t.els[0].emit('error'); t.clock.advance(2000); t.els[1].emit('error'); t.clock.advance(4000); t.els[2].emit('error');
+  t.els[t.els.length - 1].emit('playing'); t.clock.advance(3000);
+  t.clock.advance(A.RECOVER_MS + 100); t.probes[0].cb(true); t.clock.advance(A.FADE_OUT * 1000 + 200);
+  const radio = t.els[t.els.length - 1];
+  radio.emit('error'); // one failure is enough for a recovery attempt
+  const file2 = t.els[t.els.length - 1];
+  assert.strictEqual(file2.src, MP3_AMBIENT);
+  assert.strictEqual(t.live().length, 1);
+});
+
+test('offline at start: straight to the bundled file, no radio element ever created', () => {
+  const t = engine(); t.online.v = false;
+  t.eng.init(); t.eng.start();
+  assert.strictEqual(t.els.length, 1);
+  assert.strictEqual(t.els[0].src, MP3_AMBIENT);
+});
+
+test('christmas request: sequential fade-out, swap to christmas.mp3, release returns to the previous track', () => {
+  const t = engine({ source: 'incluida' });
+  t.eng.init(); t.eng.start(); t.els[0].emit('playing'); t.clock.advance(3000);
+  const amb = t.els[0];
+  t.eng.setTrack('christmas');
+  assert.strictEqual(t.els.length, 1, 'new element is not created before the old one has faded out');
+  t.clock.advance(A.FADE_OUT * 1000 / 2);
+  assert.ok(amb.volume > 0 && amb.volume < 0.35, 'fading out: ' + amb.volume);
+  assert.strictEqual(amb.paused, false);
+  t.clock.advance(A.FADE_OUT * 1000);
+  assert.strictEqual(amb.paused, true);
+  assert.strictEqual(t.els.length, 2);
+  const xmas = t.els[1];
+  assert.strictEqual(xmas.src, MP3_XMAS);
+  assert.strictEqual(xmas.loop, true);
+  assert.strictEqual(xmas.volume, 0, 'fade-in starts from silence');
+  assert.strictEqual(t.live().length, 1);
+  xmas.emit('playing'); t.clock.advance(3000);
+  assert.ok(Math.abs(xmas.volume - 0.35) < 1e-6);
+  assert.strictEqual(t.eng.currentTrack, 'christmas');
+  t.eng.setTrack(null);
+  t.clock.advance(A.FADE_OUT * 1000 + 100);
+  assert.strictEqual(xmas.paused, true);
+  assert.strictEqual(t.els[2].src, MP3_AMBIENT);
+  assert.strictEqual(t.eng.currentTrack, 'ambient');
+  assert.strictEqual(t.live().length, 1);
+});
+
+test('default Christmas source is the bundled carols even in radio mode; "radio" streams the Christmas station and falls back to christmas.mp3', () => {
+  const t = engine();
+  t.eng.init(); t.eng.start(); t.els[0].emit('playing'); t.clock.advance(3000);
+  t.eng.setTrack('christmas'); t.clock.advance(A.FADE_OUT * 1000 + 100);
+  assert.strictEqual(t.els[t.els.length - 1].src, MP3_XMAS);
+  t.eng.setChristmasSource('radio'); t.clock.advance(A.FADE_OUT * 1000 + 100);
+  const radio = t.els[t.els.length - 1];
+  assert.strictEqual(radio.src, ST.byId('christmas').url);
+  radio.emit('error'); t.clock.advance(2000); t.els[t.els.length - 1].emit('error'); t.clock.advance(4000); t.els[t.els.length - 1].emit('error');
+  assert.strictEqual(t.els[t.els.length - 1].src, MP3_XMAS, 'carols are the fallback of the Christmas radio');
+  assert.strictEqual(t.live().length, 1);
+});
+
+test('rapid track changes: the latest request wins and elements never overlap', () => {
+  const t = engine({ source: 'incluida' });
+  t.eng.init(); t.eng.start(); t.els[0].emit('playing'); t.clock.advance(3000);
+  t.eng.setTrack('christmas'); t.clock.advance(300); t.eng.setTrack(null); t.clock.advance(300); t.eng.setTrack('christmas'); t.clock.advance(300); t.eng.setTrack(null);
+  t.clock.advance(A.FADE_OUT * 1000 + 100);
+  assert.strictEqual(t.eng.currentTrack, 'ambient');
+  assert.strictEqual(t.els[t.els.length - 1].src, MP3_AMBIENT);
+  assert.strictEqual(t.live().length, 1);
+  assert.ok(t.els.length <= 3);
+});
+
+test('station change swaps sequentially; source change radio <-> bundled', () => {
+  const t = engine();
+  t.eng.init(); t.eng.start(); t.els[0].emit('playing'); t.clock.advance(3000);
+  t.eng.setStation('deepspaceone');
+  assert.strictEqual(t.els.length, 1);
+  t.clock.advance(A.FADE_OUT * 1000 + 100);
+  assert.strictEqual(t.els[1].src, ST.byId('deepspaceone').url);
+  assert.strictEqual(t.els[0].paused, true);
+  t.eng.setSource('incluida'); t.clock.advance(A.FADE_OUT * 1000 + 100);
+  assert.strictEqual(t.els[t.els.length - 1].src, MP3_AMBIENT);
+  assert.strictEqual(t.live().length, 1);
+  t.eng.setStation('spacestation'); // not streaming: no change
+  assert.strictEqual(t.els.length, 3);
+});
+
+test('mute: volume 0 immediately, download stopped after 0.7 s, unmute reconnects; muted start stays idle', () => {
+  const t = engine();
+  t.eng.init(); t.eng.start(); t.els[0].emit('playing'); t.clock.advance(3000);
+  t.eng.setEnabled(false);
+  assert.strictEqual(t.els[0].volume, 0);
+  assert.strictEqual(t.els[0].paused, false);
+  t.clock.advance(800);
+  assert.strictEqual(t.els[0].paused, true);
+  t.eng.setEnabled(true);
+  assert.strictEqual(t.els.length, 2);
+  const m = engine();
+  m.eng.setEnabled(false); m.eng.init(); m.eng.start();
+  assert.strictEqual(m.els.length, 0, 'muted at start: nothing downloads');
+  m.eng.setEnabled(true);
+  assert.strictEqual(m.els.length, 1);
+});
+
+test('autoplay blocked: needsGesture until a key press kicks the element', async () => {
+  const err = Object.assign(new Error('blocked'), { name: 'NotAllowedError' });
+  let reject = true;
+  const t = engine({ source: 'incluida', createElement: () => new FakeAudio(() => (reject ? Promise.reject(err) : undefined)) });
+  t.eng.init(); t.eng.start();
   await new Promise(r => setTimeout(r, 5));
-  assert.strictEqual(eng.needsGesture, false);
-  assert.strictEqual(statuses[statuses.length - 1], false);
-  ctx.currentTime = 30; eng.pump();
-  assert.ok(ctx.of('osc').length > 0);
-  FakeAudioContext.initialState = 'running';
+  assert.strictEqual(t.eng.needsGesture, true);
+  assert.strictEqual(t.eng.describe(), 'pulsa una tecla para activar el sonido');
+  reject = false;
+  t.eng.unlock();
+  assert.strictEqual(t.els[0].plays, 2);
+  assert.strictEqual(t.eng.needsGesture, false);
+  t.els[0].emit('playing');
+  assert.strictEqual(t.eng.streamState, 'playing');
 });
 
-test('spectrum comes from the analyser while enabled, not when muted', () => {
-  const { eng } = make();
-  eng.init(); eng.start();
-  const buf = new Uint8Array(eng.binCount());
-  assert.strictEqual(eng.getSpectrum(buf), true);
+test('nothing audible depends on Web Audio: the engine never creates oscillators/destinations and works with analyser disabled', () => {
+  const t = engine({ source: 'incluida' });
+  t.eng.init(); t.eng.start(); t.els[0].emit('playing');
+  assert.strictEqual(t.eng._debug().ctx, null);
+  assert.strictEqual(t.eng.binCount(), 0);
+  assert.strictEqual(t.eng.getSpectrum(new Uint8Array(8)), false);
+});
+
+// ---- analyser tap (modern browsers) and the silence fallback ----------------------------------------------
+class FakeCtx {
+  constructor() { FakeCtx.last = this; this.state = 'running'; this.nodes = []; this.destination = { kind: 'dest' }; this.sources = []; }
+  createAnalyser() { const a = { kind: 'analyser', frequencyBinCount: 512, fill: 100, connect: n => { a.out = n; }, getByteFrequencyData(arr) { arr.fill(a.fill); } }; this.analyser = a; return a; }
+  createMediaElementSource(el) { const s = { el, connect: n => { s.out = n; } }; this.sources.push(s); return s; }
+  resume() { this.state = 'running'; return Promise.resolve(); }
+}
+
+test('analyser: element routed element -> analyser -> destination; real spectrum while playing', () => {
+  const now = { v: 0 };
+  const t = engine({ analyser: true, AudioContext: FakeCtx, now: () => now.v, source: 'incluida' });
+  t.eng.init(); t.eng.start();
+  const c = FakeCtx.last;
+  assert.strictEqual(c.sources[0].el, t.els[0]);
+  assert.strictEqual(c.sources[0].out, c.analyser);
+  assert.strictEqual(c.analyser.out, c.destination);
+  assert.strictEqual(t.eng.binCount(), 512);
+  const buf = new Uint8Array(512);
+  assert.strictEqual(t.eng.getSpectrum(buf), false, 'not playing yet');
+  t.els[0].emit('playing');
+  assert.strictEqual(t.eng.getSpectrum(buf), true);
   assert.strictEqual(buf[0], 100);
-  eng.setEnabled(false);
-  assert.strictEqual(eng.getSpectrum(buf), false);
+  t.eng.setEnabled(false);
+  assert.strictEqual(t.eng.getSpectrum(buf), false, 'muted');
 });
 
-test('engine without ctx.state (Chromium 38) behaves as running', () => {
-  FakeAudioContext.initialState = undefined;
-  const { eng } = make();
-  eng.init(); eng.start();
-  assert.strictEqual(eng.needsGesture, false);
-  const ctx = eng._debug().ctx;
-  pumpUntil(eng, ctx, 20);
-  assert.ok(ctx.of('osc').length > 0);
-  FakeAudioContext.initialState = 'running';
+test('analyser silence (all zeros for ~2 s) makes the visualizer fall back to the simulated spectrum', () => {
+  const now = { v: 1000 };
+  const t = engine({ analyser: true, AudioContext: FakeCtx, now: () => now.v, source: 'incluida' });
+  t.eng.init(); t.eng.start(); t.els[0].emit('playing');
+  FakeCtx.last.analyser.fill = 0;
+  const buf = new Uint8Array(512);
+  assert.strictEqual(t.eng.getSpectrum(buf), true, 'a moment of silence is still real');
+  now.v += A.SILENCE_MS - 1; assert.strictEqual(t.eng.getSpectrum(buf), true);
+  now.v += 2; assert.strictEqual(t.eng.getSpectrum(buf), false, 'dead tap: simulate');
+  FakeCtx.last.analyser.fill = 50; // signal returns
+  assert.strictEqual(t.eng.getSpectrum(buf), true);
+});
+
+test('analyser: context suspended until a key press, a throwing context never breaks playback', async () => {
+  class Suspended extends FakeCtx { constructor() { super(); this.state = 'suspended'; } resume() { this.state = 'running'; return Promise.resolve(); } }
+  const t = engine({ analyser: true, AudioContext: Suspended, source: 'incluida' });
+  t.eng.init(); t.eng.start();
+  assert.strictEqual(t.eng.needsGesture, true);
+  t.eng.unlock();
+  await new Promise(r => setTimeout(r, 5));
+  assert.strictEqual(t.eng.needsGesture, false);
+  const bad = engine({ analyser: true, AudioContext: function () { throw new Error('nope'); }, source: 'incluida' });
+  assert.doesNotThrow(() => { bad.eng.init(); bad.eng.start(); bad.els[0].emit('playing'); });
+  assert.strictEqual(bad.eng.describe(), 'música incluida');
+});
+
+test('selecting Kiss FM as the ambient station streams the plain URL and falls back to the bundled ambient MP3', () => {
+  const t = engine({ station: 'kissfm' });
+  t.eng.init(); t.eng.start();
+  assert.strictEqual(t.els[0].src, 'https://bbkissfm.kissfmradio.cires21.com/bbkissfm.mp3');
+  t.els[0].emit('error'); t.clock.advance(2000); t.els[1].emit('error'); t.clock.advance(4000); t.els[2].emit('error');
+  assert.strictEqual(t.els[t.els.length - 1].src, MP3_AMBIENT);
+  const u = engine(); u.eng.init(); u.eng.setStation('kissfm'); u.eng.start(); u.els[0].emit('playing'); u.clock.advance(3000);
+  u.eng.setStation('dronezone'); u.clock.advance(A.FADE_OUT * 1000 + 100);
+  assert.strictEqual(u.els[u.els.length - 1].src, ST.byId('dronezone').url);
 });

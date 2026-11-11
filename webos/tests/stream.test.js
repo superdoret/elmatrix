@@ -3,14 +3,12 @@ const assert = require('node:assert');
 require('./load.js');
 const ST = require('../js/music/stations.js');
 const SP = require('../js/music/stream.js');
-const A = require('../js/audio.js');
 const { FakeClock, FakeAudio } = require('./fakeclock.js');
-const { FakeAudioContext } = require('./fakeaudio.js');
 
 // ---- stations table ------------------------------------------------------------------
 test('stations: single table with only the verified SomaFM URLs and sane defaults', () => {
-  assert.deepStrictEqual(ST.STATIONS.map(s => s.id), ['dronezone', 'deepspaceone', 'spacestation', 'christmas', 'xmasinfrisko']);
-  ST.STATIONS.forEach(s => { assert.match(s.url, /^https:\/\/ice1\.somafm\.com\/[a-z]+-128-mp3$/); assert.ok(s.label && ['ambient', 'christmas'].includes(s.kind)); });
+  assert.deepStrictEqual(ST.STATIONS.map(s => s.id), ['dronezone', 'deepspaceone', 'spacestation', 'kissfm', 'christmas', 'xmasinfrisko']);
+  ST.STATIONS.filter(s => s.id !== 'kissfm').forEach(s => { assert.match(s.url, /^https:\/\/ice1\.somafm\.com\/[a-z]+-128-mp3$/); assert.ok(s.label && ['ambient', 'christmas'].includes(s.kind)); });
   assert.strictEqual(ST.forTrack('ambient').id, 'dronezone');
   assert.strictEqual(ST.forTrack('ambient', 'spacestation').id, 'spacestation');
   assert.strictEqual(ST.forTrack('ambient', 'christmas').id, 'dronezone', 'a christmas station is not an ambient choice');
@@ -167,197 +165,46 @@ test('a throwing onChange callback never breaks the state machine', () => {
   assert.doesNotThrow(() => { p.start(); p.element().emit('error'); });
 });
 
-// ---- engine + stream (fake Web Audio, fake element, fake clock) -------------------------------------
-function engine(extra) {
-  FakeAudio.all.length = 0; FakeAudioContext.initialState = 'running'; FakeAudioContext.failRouting = false;
-  const clock = new FakeClock(), online = { v: true };
-  const eng = A.createEngine(Object.assign({ AudioContext: FakeAudioContext, seed: 1, timers: clock, source: 'stream', createElement: () => new FakeAudio(), isOnline: () => online.v }, extra));
-  return { eng, clock, online, els: FakeAudio.all };
-}
-const lastRamp = param => param.events.filter(e => e.type === 'ramp').pop();
-const oscCount = eng => eng._debug().ctx.of('osc').length;
-
-test('stream mode: element routed through a gain into the master chain; silent until playing, then a 3 s fade in', () => {
-  const { eng, els } = engine();
-  eng.init(); eng.start();
-  assert.strictEqual(els.length, 1);
-  assert.strictEqual(els[0].src, ST.byId('dronezone').url);
-  const d = eng._debug(), slot = d.active;
-  const srcNode = d.ctx.of('mediaSource')[0];
-  assert.strictEqual(srcNode.element, els[0]);
-  assert.ok(srcNode.out.includes(slot.streamGain) && slot.streamGain.out.includes(d.nodes.master), 'element -> stream gain -> master -> compressor -> analyser');
-  assert.strictEqual(slot.streamGain.gain.events[0].value, 0);
-  assert.strictEqual(lastRamp(slot.streamGain.gain), undefined, 'still silent while connecting');
-  d.ctx.currentTime = 5; els[0].emit('playing');
-  assert.deepStrictEqual([lastRamp(slot.streamGain.gain).value, lastRamp(slot.streamGain.gain).time], [1, 5 + A.CROSSFADE]);
-  assert.strictEqual(eng.streamState, 'playing');
-  assert.strictEqual(eng.describe(), 'radio en línea');
-  for (let t = 0; t < 30; t += 0.4) { d.ctx.currentTime = t; eng.pump(); }
-  assert.strictEqual(oscCount(eng), 0, 'no synthesized notes while the radio plays');
-  assert.strictEqual(eng.getSpectrum(new Uint8Array(eng.binCount())), true, 'visualizer taps the master chain');
-});
-
-test('failures fall back to the synth, and recovery crossfades back to the radio', () => {
-  const { eng, clock, els } = engine();
-  eng.init(); eng.start();
-  const d = eng._debug(), slot = d.active;
-  d.ctx.currentTime = 1; els[0].emit('playing');
-  d.ctx.currentTime = 10; els[0].emit('error');
-  clock.advance(2000); els[1].emit('error'); clock.advance(4000); els[2].emit('error'); // third consecutive failure
-  assert.strictEqual(eng.streamState, 'fallback');
-  assert.strictEqual(eng.describe(), 'sin conexión: música sintetizada');
-  assert.strictEqual(lastRamp(slot.bus.gain).value, 1, 'synth bus fades in');
-  assert.strictEqual(lastRamp(slot.streamGain.gain).value, 0, 'stream gain fades out');
-  d.ctx.currentTime = 20; eng.pump(); d.ctx.currentTime = 30; eng.pump();
-  assert.ok(oscCount(eng) > 0, 'synth music is scheduled');
-  // background retry succeeds
-  d.ctx.currentTime = 400; clock.advance(SP.BG_RETRY);
-  const el = els[els.length - 1]; el.emit('playing');
-  assert.strictEqual(eng.streamState, 'playing');
-  assert.strictEqual(lastRamp(slot.bus.gain).value, 0, 'synth fades out');
-  assert.strictEqual(lastRamp(slot.streamGain.gain).value, 1, 'radio fades back in');
-  const n = oscCount(eng);
-  d.ctx.currentTime = 450; eng.pump();
-  assert.strictEqual(oscCount(eng), n, 'synth stops scheduling after recovery');
-});
-
-test('offline at start: straight to the synth fallback', () => {
-  const { eng, online, els } = engine();
-  online.v = false;
-  eng.init(); eng.start();
-  assert.strictEqual(els.length, 0);
-  assert.strictEqual(eng.streamState, 'fallback');
-  const ctx = eng._debug().ctx;
-  ctx.currentTime = 2; eng.pump();
-  assert.ok(oscCount(eng) > 0);
-});
-
-test('Web Audio routing failure falls back to element.volume with timed ramps', () => {
-  const { eng, clock, els } = engine();
-  FakeAudioContext.failRouting = true;
-  eng.init(); eng.start();
-  const slot = eng._debug().active;
-  assert.strictEqual(slot.elVol, true);
-  els[0].emit('playing');
-  clock.advance(3500);
-  assert.ok(Math.abs(els[0].volume - 0.35) < 1e-6, 'element volume ' + els[0].volume);
-  eng.setVolume(0.6); assert.ok(Math.abs(els[0].volume - 0.6) < 1e-6);
-  eng.setEnabled(false); assert.strictEqual(els[0].volume, 0);
-  FakeAudioContext.failRouting = false;
-});
-
-test('no Web Audio at all: the radio still plays through element.volume (visualizer unavailable)', () => {
-  const { eng, clock, els } = engine({ AudioContext: null });
-  assert.strictEqual(eng.init(), true);
-  assert.strictEqual(eng.webAudio, false);
-  eng.start();
-  assert.strictEqual(els.length, 1);
-  els[0].emit('playing'); clock.advance(3500);
-  assert.ok(Math.abs(els[0].volume - 0.35) < 1e-6);
-  assert.strictEqual(eng.getSpectrum(new Uint8Array(4)), false);
-  els[0].emit('error'); clock.advance(2000); els[1].emit('error'); clock.advance(4000); els[2].emit('error');
-  assert.doesNotThrow(() => { eng.pump(); eng.setTrack('christmas'); });
-  assert.strictEqual(eng.describe().length > 0, true);
-});
-
-test('mute stops the download after the fade and unmute reconnects; muted start does not stream', () => {
-  const { eng, clock, els } = engine();
-  eng.init(); eng.start();
-  els[0].emit('playing');
-  eng.setEnabled(false);
-  assert.strictEqual(lastRamp(eng._debug().nodes.master.gain).value, 0);
-  assert.strictEqual(els[0].paused, false, 'still fading');
-  clock.advance(800);
-  assert.strictEqual(els[0].paused, true); assert.strictEqual(eng._debug().active.player.state, 'idle');
-  eng.setEnabled(true);
-  assert.strictEqual(els.length, 2, 'new connection');
-  const m = engine();
-  m.eng.setEnabled(false); m.eng.init(); m.eng.start();
-  assert.strictEqual(m.els.length, 0, 'muted at start: no stream yet');
-  m.eng.setEnabled(true);
-  assert.strictEqual(m.els.length, 1);
-});
-
-test('changing station crossfades to a new stream and stops the old one', () => {
-  const { eng, clock, els } = engine();
-  eng.init(); eng.start(); els[0].emit('playing');
-  eng.setStation('deepspaceone');
-  assert.strictEqual(els.length, 2);
-  assert.strictEqual(els[1].src, ST.byId('deepspaceone').url);
-  assert.ok(lastRamp(eng._debug().ctx.of('gain').filter(g => g.gain.events.length)[0].gain));
-  clock.advance(4000);
-  assert.strictEqual(els[0].paused, true, 'old stream stopped after the 3 s fade');
-  assert.strictEqual(els[1].paused, false);
-});
-
-test('christmas track: synthesized carols by default even in stream mode; "radio" streams the christmas station; back to ambient restores', () => {
-  const { eng, clock, els } = engine();
-  eng.init(); eng.start(); els[0].emit('playing');
-  const ctx = eng._debug().ctx;
-  ctx.currentTime = 10; eng.setTrack('christmas');
-  assert.strictEqual(eng.currentTrack, 'christmas');
-  assert.strictEqual(eng._debug().active.player, null, 'carols need no internet');
-  assert.strictEqual(els.length, 1);
-  ctx.currentTime = 12; eng.pump(); ctx.currentTime = 20; eng.pump();
-  assert.ok(oscCount(eng) > 0);
-  clock.advance(4000);
-  assert.strictEqual(els[0].paused, true, 'ambient radio released while the carols play');
-  ctx.currentTime = 100; eng.setTrack(null);
-  assert.strictEqual(els.length, 2);
-  assert.strictEqual(els[1].src, ST.byId('dronezone').url);
-  // radio option
-  eng.setChristmasSource('radio');
-  ctx.currentTime = 200; eng.setTrack('christmas');
-  assert.strictEqual(els[els.length - 1].src, ST.byId('christmas').url);
-  // radio failing falls back to the synthesized carols
-  const el = els[els.length - 1];
-  el.emit('error'); clock.advance(2000); els[els.length - 1].emit('error'); clock.advance(4000); els[els.length - 1].emit('error');
-  assert.strictEqual(eng.streamState, 'fallback');
-  const before = oscCount(eng);
-  ctx.currentTime = 220; eng.pump(); ctx.currentTime = 230; eng.pump();
-  assert.ok(oscCount(eng) > before, 'carols play as the fallback');
-});
-
-test('music source "synth" never creates audio elements', () => {
-  const { eng, els } = engine({ source: 'synth' });
-  eng.init(); eng.start();
-  assert.strictEqual(els.length, 0);
-  eng.setSource('stream');
-  assert.strictEqual(els.length, 1);
-  eng.setSource('synth');
-  assert.strictEqual(eng.source, 'synth');
-});
-
-test('autoplay blocked by the browser: needsGesture until a key press kicks the element', async () => {
-  const err = Object.assign(new Error('blocked'), { name: 'NotAllowedError' });
-  let reject = true;
-  const { eng, els } = engine({ createElement: () => new FakeAudio(() => (reject ? Promise.reject(err) : undefined)) });
-  const seen = [];
-  eng.init(); eng.start();
-  await new Promise(r => setTimeout(r, 5));
-  assert.strictEqual(eng.needsGesture, true);
-  assert.strictEqual(eng.describe(), 'pulsa una tecla para activar el sonido');
-  reject = false;
-  eng.unlock(); seen.push(eng.needsGesture);
-  assert.strictEqual(els[0].plays, 2);
-  assert.strictEqual(eng.needsGesture, false);
-  els[0].emit('playing');
-  assert.strictEqual(eng.streamState, 'playing');
-});
-
-test('engine never throws when the audio element misbehaves', () => {
-  const { eng } = engine({ createElement: () => { throw new Error('no Audio'); } });
-  assert.doesNotThrow(() => { eng.init(); eng.start(); eng.setTrack('christmas'); eng.setEnabled(false); eng.setEnabled(true); eng.pump(); eng.dispose(); });
-});
-
 test('settings: music source/station/christmas options and defaults', () => {
   const S = require('../js/settings.js'), C = require('../js/catalog.js');
   const d = S.defaults().global;
   assert.deepStrictEqual([d.music_source, d.music_station, d.christmas_source], ['stream', 'dronezone', 'carols']);
   const station = C.GLOBAL_FIELDS.find(f => f.key === 'music_station');
-  assert.deepStrictEqual(station.options.map(o => o.value), ['dronezone', 'deepspaceone', 'spacestation']);
+  assert.deepStrictEqual(station.options.map(o => o.value), ['dronezone', 'deepspaceone', 'spacestation', 'kissfm']);
+  assert.ok(/^SomaFM: /.test(station.options[0].label));
+  assert.ok(/Kiss FM España/.test(station.options[3].label) && /comercial/.test(station.options[3].label) && /anuncios/.test(station.options[3].label));
+  assert.strictEqual(S.merge({ global: { music_station: 'kissfm' } }).global.music_station, 'kissfm', 'choice persists');
+  assert.strictEqual(S.merge({ global: { music_station: 'nope' } }).global.music_station, 'dronezone', 'unknown stored id -> default');
   const xmas = C.GLOBAL_FIELDS.find(f => f.key === 'christmas_source');
   assert.ok(/Christmas Lounge/.test(xmas.options[1].label) && /lounge/.test(xmas.options[1].label), 'radio option labelled honestly');
-  const m = S.merge({ global: { music_source: 'bogus', music_station: 'christmas', christmas_source: 'radio' } }).global;
+  assert.strictEqual(xmas.options[0].label, 'Villancicos (incluidos)');
+  const src = C.GLOBAL_FIELDS.find(f => f.key === 'music_source');
+  assert.deepStrictEqual(src.options.map(o => o.value), ['stream', 'incluida']);
+  assert.ok(/incluida/i.test(src.options[1].label) && /sin internet/.test(src.options[1].label));
+  const m = S.merge({ global: { music_source: 'synth', music_station: 'christmas', christmas_source: 'radio' } }).global;
   assert.deepStrictEqual([m.music_source, m.music_station, m.christmas_source], ['stream', 'dronezone', 'radio']);
+});
+
+test('kiss fm station: plain URL (no signed token), selectable as ambient, unknown ids fall back to the default', () => {
+  const k = ST.byId('kissfm');
+  assert.strictEqual(k.url, 'https://bbkissfm.kissfmradio.cires21.com/bbkissfm.mp3');
+  assert.ok(!/wmsAuthSign|\?/.test(k.url));
+  assert.strictEqual(k.kind, 'ambient');
+  assert.strictEqual(ST.forTrack('ambient', 'kissfm').id, 'kissfm');
+  assert.strictEqual(ST.forTrack('christmas', 'kissfm').id, 'christmas', 'not a christmas station');
+  assert.strictEqual(ST.forTrack('ambient', 'does-not-exist').id, 'dronezone');
+  assert.strictEqual(ST.DEFAULTS.ambient, 'dronezone', 'default stays the ambient station');
+});
+
+test('every (re)connect assigns src again so redirects/expiring tokens are re-resolved', () => {
+  FakeAudio.all.length = 0; FakeAudio.srcLog.length = 0;
+  const clock = new FakeClock();
+  const p = new SP.StreamPlayer({ url: ST.byId('kissfm').url, timers: clock, createElement: () => new FakeAudio(), onChange() {} });
+  p.start(); p.element().emit('error'); clock.advance(2000); p.element().emit('error'); clock.advance(4000);
+  const assigns = FakeAudio.srcLog.filter(([, v]) => v === ST.byId('kissfm').url);
+  assert.strictEqual(assigns.length, 3, 'initial connect + 2 retries each set src');
+  assert.strictEqual(new Set(assigns.map(a => a[0])).size, 3, 'each on a fresh element');
+  // a stall-triggered reconnect also re-sets src
+  p.element().emit('playing'); p.element().emit('waiting'); clock.advance(SP.STALL_TIMEOUT); clock.advance(2000);
+  assert.strictEqual(FakeAudio.srcLog.filter(([, v]) => v === ST.byId('kissfm').url).length, 4);
 });

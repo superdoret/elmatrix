@@ -20,7 +20,9 @@ class FakeClock {
 }
 // Fake HTMLAudioElement: records calls and lets tests emit media events.
 class FakeAudio {
-  constructor(playResult) { this.listeners = {}; this.plays = 0; this.paused = true; this.src = ''; this.volume = 1; this.playResult = playResult; FakeAudio.all.push(this); }
+  constructor(playResult) { this.listeners = {}; this.plays = 0; this.paused = true; this._src = ''; this.volume = 1; this.playResult = playResult; FakeAudio.all.push(this); }
+  get src() { return this._src; }
+  set src(v) { this._src = v; FakeAudio.srcLog.push([this, v]); }
   addEventListener(t, f) { (this.listeners[t] = this.listeners[t] || []).push(f); }
   removeEventListener(t, f) { this.listeners[t] = (this.listeners[t] || []).filter(x => x !== f); }
   play() { this.plays++; this.paused = false; return typeof this.playResult === 'function' ? this.playResult() : this.playResult; }
@@ -31,4 +33,5 @@ class FakeAudio {
   listenerCount() { return Object.keys(this.listeners).reduce((n, k) => n + this.listeners[k].length, 0); }
 }
 FakeAudio.all = [];
+FakeAudio.srcLog = [];
 module.exports = { FakeClock, FakeAudio };

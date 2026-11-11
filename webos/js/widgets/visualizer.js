@@ -44,11 +44,12 @@
       var fb = ctx.fb, FB = ctx.FB, w = ctx.w, h = ctx.h, audio = ctx.audio;
       var n = Math.floor((w - 8) / 4), top = 14, segH = 3, segGap = 1, rows = Math.floor((h - top - 4) / (segH + segGap));
       var bars = new Float32Array(n), peaks = new Float32Array(n), target = new Float32Array(n);
-      var buf = audio && audio.binCount && audio.binCount() ? new Uint8Array(audio.binCount()) : null;
+      var buf = null;
       var agc = 0.25, last = 0, live = false;
       var colors = []; for (var r = 0; r < rows; r++) colors.push(FB.hsv(125 - 125 * (r / (rows - 1)), 1, 1));
       await ctx.loop(ctx.cfg.duration, 30, function (t) {
         var dt = Math.min(0.1, t - last); last = t;
+        if (!buf && audio && audio.binCount && audio.binCount()) buf = new Uint8Array(audio.binCount()); // the analyser appears after the first track connects
         live = !!(buf && audio.getSpectrum(buf));
         if (live) {
           binsToBars(buf, n, target);

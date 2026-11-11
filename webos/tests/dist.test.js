@@ -96,13 +96,26 @@ test('dist HTML has no inline modern-only constructs and loads nothing external'
   assert.ok(!/type="module"|nomodule/.test(html));
 });
 
-test('audio engine only uses Web Audio calls available on Chromium 38 and guards resume()', () => {
+test('audio engine: playback is <audio> only; Web Audio is just an optional analyser tap, resume() is feature-checked', () => {
   const src = fs.readFileSync(path.join(root, 'js', 'audio.js'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-  assert.ok(/webkitAudioContext/.test(src), 'prefixed constructor fallback');
+  assert.ok(!/createOscillator|createBufferSource|createGain|createConvolver|createDynamicsCompressor|createDelay/.test(src), 'no Web Audio playback/synthesis');
+  assert.ok(/createMediaElementSource/.test(src) && /createAnalyser/.test(src));
   const resumes = src.match(/\.resume\(/g) || [];
   assert.strictEqual(resumes.length, 1);
   assert.ok(/typeof ctx\.resume === 'function'/.test(src), 'resume() must be feature-checked');
-  assert.ok(!/\.state\s*=[^=]/.test(src));
-  // ctx.state may be undefined on old engines: only compared, never required
-  assert.ok(/ctx\.state === undefined/.test(src));
+  assert.ok(/web0s\|webos/i.test(fs.readFileSync(path.join(root, 'js', 'app.js'), 'utf8')), 'TVs never use the Web Audio tap');
+});
+
+test('dist ships the bundled MP3s (assets/music) and the credit line', () => {
+  ['ambient.mp3', 'christmas.mp3'].forEach(f => {
+    const a = path.join(dist, 'assets', 'music', f), b = path.join(root, 'assets', 'music', f);
+    assert.ok(fs.existsSync(a), f);
+    assert.strictEqual(fs.statSync(a).size, fs.statSync(b).size);
+  });
+  const html = fs.readFileSync(path.join(dist, 'index.html'), 'utf8');
+  assert.ok(html.includes('<div id="credit" class="byline">Desarrollado por Matias Toro</div>'), 'credit text in dist/index.html');
+  assert.ok(fs.readFileSync(path.join(root, 'index.html'), 'utf8').includes('Desarrollado por Matias Toro'));
+  assert.ok(/\.byline\s*\{[^}]*pointer-events:\s*none/.test(fs.readFileSync(path.join(dist, 'css', 'app.css'), 'utf8')), 'credit ignores input');
+  // the music data used only by the offline renderer is not part of the shipped scripts
+  assert.ok(!fs.existsSync(path.join(dist, 'js', 'music')));
 });
