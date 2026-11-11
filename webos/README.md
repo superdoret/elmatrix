@@ -27,9 +27,9 @@ Parámetros de URL útiles para pruebas:
 
 ## Línea de créditos
 
-En la parte inferior de la pantalla, en todos los modos, aparece "Desarrollado por Matias Toro" a la izquierda y la versión (por ejemplo "v1.1.0") a la derecha. El texto está en un solo sitio (`index.html`, elemento `#credit`) y un test comprueba que llega a `dist/index.html`. La versión sale de `appinfo.json`: el build la inyecta en `dist/index.html` y, si abrís `index.html` directamente para desarrollar, la app la lee de `appinfo.json`. Los Ajustes también la muestran.
+En la parte inferior de la pantalla, en todos los modos, aparece "Desarrollado por Matias Toro" a la izquierda y la versión (por ejemplo "v1.2.0") a la derecha. El texto está en un solo sitio (`index.html`, elemento `#credit`) y un test comprueba que llega a `dist/index.html`. La versión sale de `appinfo.json`: el build la inyecta en `dist/index.html` y, si abrís `index.html` directamente para desarrollar, la app la lee de `appinfo.json`. Los Ajustes también la muestran.
 
-**Cambiar la versión**: editá `"version"` en `appinfo.json` y en `package.json` (y `package-lock.json`); un test comprueba que coincidan. webOS exige el formato x.y.z. El paquete se llama según la versión: `com.elmatrix.tv_1.1.0_all.ipk`. La rejilla de LEDs reserva una franja inferior del 6,5 % de la altura para esa línea, así que no tapa el contenido.
+**Cambiar la versión**: editá `"version"` en `appinfo.json` y en `package.json` (y `package-lock.json`); un test comprueba que coincidan. webOS exige el formato x.y.z. El paquete se llama según la versión: `com.elmatrix.tv_1.2.0_all.ipk`. La rejilla de LEDs reserva una franja inferior del 6,5 % de la altura para esa línea, así que no tapa el contenido.
 
 ## Compilar para el televisor (ES5)
 
@@ -49,8 +49,8 @@ Requisitos: TV LG con webOS 3.x o superior, cuenta de LG Developer y la app **De
 
 1. Instalá las herramientas: `npm i -g @webos-tools/cli`
 2. Registrá la TV: `ares-setup-device` (agregá un dispositivo con la IP de la TV, puerto 9922, usuario `prisoner`)
-3. Compilá y empaquetá: `npm run build` y luego `ares-package dist` (genera `com.elmatrix.tv_<versión>_all.ipk`, por ejemplo `com.elmatrix.tv_1.1.0_all.ipk`)
-4. Instalá: `ares-install --device <nombre> com.elmatrix.tv_1.1.0_all.ipk`
+3. Compilá y empaquetá: `npm run build` y luego `ares-package dist` (genera `com.elmatrix.tv_<versión>_all.ipk`, por ejemplo `com.elmatrix.tv_1.2.0_all.ipk`)
+4. Instalá: `ares-install --device <nombre> com.elmatrix.tv_1.2.0_all.ipk`
 5. Abrila: `ares-launch --device <nombre> com.elmatrix.tv`
 
 Resultado esperado: aparece la app "eLMaTrIx" en la TV y empieza a rotar widgets. Si la pantalla queda negra, mirá la consola con `ares-inspect --device <nombre> --app com.elmatrix.tv --open`.
