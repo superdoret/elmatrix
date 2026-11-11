@@ -216,6 +216,7 @@
     var widget = E.widgets[id];
     if (!widget) return Promise.reject(new Error('unknown widget ' + id));
     var cfg = settings.widgets[id] ? settings.widgets[id].config : {};
+    if (id === 'navidad' && params.get('scene')) { cfg = Object.assign({}, cfg, { scene_only: params.get('scene') }); } // dev/test: one scene only
     var fb = renderer.fb;
     fb.clear(0);
     var ctx = E.context.createContext({

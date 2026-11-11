@@ -78,7 +78,21 @@ En el escritorio: flechas, Enter, Esc, y las letras `r`, `y`, `g`, `b` como tecl
 
 Reloj, Reloj mundial, Cuenta regresiva, Cotizaciones (CoinGecko + dolarapi.com), Pronóstico (Open-Meteo), Deportes (TheSportsDB), Frases positivas, Palabra y Pixel art (escena de día/noche, **Navidad** y Snake).
 
-Modos visuales (no necesitan red): **Lluvia Matrix**, **Chimenea**, **Acuario**, **Fuegos artificiales**, **Plasma**, **Juego de la vida** (se reinicia solo si se estanca), **Estrellas** y **Visualizador de música** (barras de espectro; si no hay sonido muestra un espectro simulado).
+Modos visuales (no necesitan red): **Navidad** (galería de 15 escenas, ver abajo), **Lluvia Matrix**, **Chimenea**, **Acuario**, **Fuegos artificiales**, **Plasma**, **Juego de la vida** (se reinicia solo si se estanca), **Estrellas** y **Visualizador de música** (barras de espectro; si no hay sonido muestra un espectro simulado).
+
+### Navidad: galería de escenas
+
+El widget **Navidad** muestra escenas navideñas animadas, todas dibujadas con código (sin imágenes), una detrás de otra con un fundido suave entre ellas, y pide la música navideña mientras está en pantalla. En cada visita muestra varias escenas seguidas y luego vuelve a la rotación normal. Escenas:
+
+| Escena | Escena | Escena |
+|--------|--------|--------|
+| Árbol de Navidad | Muñeco de nieve | Papá Noel sobre los tejados |
+| Chimenea con medias | Belén | Reyes Magos |
+| Pueblo nevado | Casa de jengibre | Globo de nieve |
+| Corona de Adviento | Aurora boreal sobre pinos | Pingüinos y osos polares |
+| Chocolate caliente | Bolas del árbol | Año Nuevo ("Feliz <año>": en enero el año que empieza, el resto del año el próximo) |
+
+Opciones en Ajustes (se pueden editar solo con el mando): **Duración** de cada escena (6 a 60 s, por defecto 18), **Escenas por visita** (por defecto 4), **Orden de las escenas** (aleatorio, sin repetir la misma dos veces seguidas, o secuencial) y un interruptor **Escena: …** por cada una (todas activas; si apagás todas se usan todas). Con **Fijar modo** (Verde) la escena actual se queda y sigue animándose. El estilo `Navidad` de Pixel art sigue existiendo y es la primera escena.
 
 Cada uno tiene sus opciones en Ajustes (se guardan en el almacenamiento local de la app). Si no hay red, los widgets con datos muestran "Sin conexión" y la rotación sigue.
 

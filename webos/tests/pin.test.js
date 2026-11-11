@@ -132,7 +132,7 @@ test('pin is session-only and emits events; the green key toggles it on the bann
   t.s.setPin(true); t.s.setPin(true); t.s.togglePin();
   assert.deepStrictEqual(events, [['pin', true], ['pin', false]]);
   assert.strictEqual(new Scheduler({ getEnabled: () => [], getPauseSeconds: () => 0, getOrder: () => 'shuffle', runWidget: async () => {} }).pinned, false);
-  assert.ok(!JSON.stringify(S.defaults()).includes('pin'), 'not part of the persisted settings');
+  assert.ok(!/"pinned?"/.test(JSON.stringify(S.defaults())), 'not part of the persisted settings');
   assert.strictEqual(keys.bannerAction('green'), 'togglePin');
   assert.strictEqual(keys.bannerAction('yellow'), 'togglePause');
   // in settings, green is not routed to the pin (the model ignores it outside the keyboard)
