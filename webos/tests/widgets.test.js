@@ -124,6 +124,15 @@ test('forecast: geocode + daily parsing, WMO icons', () => {
 });
 
 // ---- sports --------------------------------------------------------------------
+test('sports: the disabled free key "3" and blanks map to the current test key "123"', () => {
+  assert.strictEqual(W.sports.sportsKey('3'), '123');
+  assert.strictEqual(W.sports.sportsKey(' 3 '), '123');
+  assert.strictEqual(W.sports.sportsKey(''), '123');
+  assert.strictEqual(W.sports.sportsKey(undefined), '123');
+  assert.strictEqual(W.sports.sportsKey('123'), '123');
+  assert.strictEqual(W.sports.sportsKey('mykey'), 'mykey');
+});
+
 test('sports: team pick, last and next events from canned JSON', () => {
   const team = W.sports.pickTeam(fixture('sports-teams'), 'barcelona');
   assert.strictEqual(team.idTeam, '133739'); // exact match beats first result order

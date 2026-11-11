@@ -133,8 +133,8 @@ WIDGETS: Tuple[Widget, ...] = (
            settings=(
                Field("team", "Equipo", "text", "Barcelona",
                      "Nombre del equipo en TheSportsDB."),
-               Field("api_key", "Clave de API", "text", "3",
-                     "Clave de TheSportsDB (la gratuita es 3)."),
+               Field("api_key", "Clave de API", "text", "123",
+                     "Clave de TheSportsDB (la gratuita actual es 123)."),
                _duration(12),
            )),
     Widget("worldclock", "Reloj mundial", "Hora actual en varias ciudades.",

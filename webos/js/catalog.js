@@ -61,7 +61,7 @@
     { id: 'sports', name: 'Deportes', description: 'Último resultado y próximo partido de un equipo.', category: 'Información', network: true, def_enabled: true,
       fields: [
         { key: 'team', label: 'Equipo', type: 'text', def: 'Barcelona', presets: TEAM_PRESETS },
-        { key: 'api_key', label: 'Clave de API', type: 'text', def: '3', help: 'Clave de TheSportsDB (la gratuita es 3).' },
+        { key: 'api_key', label: 'Clave de API', type: 'text', def: '123', help: 'Clave de TheSportsDB (la gratuita actual es 123).' },
         duration(12)
       ] },
     { id: 'pixelart', name: 'Pixel art', description: 'Escena de día y noche, Navidad o un Snake que juega solo.', category: 'Entretenimiento', network: false, def_enabled: true,

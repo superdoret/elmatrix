@@ -5,6 +5,13 @@
   E.widgets = E.widgets || {};
 
   var BASE = 'https://www.thesportsdb.com/api/v1/json/%KEY%/';
+
+  // The old free key "3" was disabled by TheSportsDB; its free test key is now "123".
+  function sportsKey(value) {
+    var key = String(value || '').trim();
+    return (!key || key === '3') ? '123' : key;
+  }
+
   var TEAM_TTL = 86400000, EVENT_TTL = 600000;
 
   function list(data, key) {
@@ -62,7 +69,7 @@
 
   var widget = {
     id: 'sports',
-    pickTeam: pickTeam, parseLast: parseLast, parseNext: parseNext, formatWhen: formatWhen, eventDate: eventDate,
+    sportsKey: sportsKey, pickTeam: pickTeam, parseLast: parseLast, parseNext: parseNext, formatWhen: formatWhen, eventDate: eventDate,
     run: async function (ctx) {
       var fb = ctx.fb, w = ctx.w, h = ctx.h, cfg = ctx.cfg, TL = ctx.TL;
       var teamName = String(cfg.team || '').trim();
@@ -78,7 +85,7 @@
       fb.clear(0);
       ctx.drawFit('Cargando deportes…', { fonts: ['9x18B', '7x14B'], x: 4, y: 0, w: w - 8, h: h, align: 'center', valign: 'middle', color: 0x8080a0, maxScale: 2 });
       ctx.present();
-      var base = BASE.replace('%KEY%', encodeURIComponent(String(cfg.api_key || '').trim() || '3'));
+      var base = BASE.replace('%KEY%', encodeURIComponent(sportsKey(cfg.api_key)));
       var team, last = null, next = null;
       try {
         team = pickTeam(await ctx.abortable(ctx.getJson(base + 'searchteams.php?t=' + encodeURIComponent(teamName), TEAM_TTL)), teamName);

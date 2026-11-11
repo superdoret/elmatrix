@@ -7,6 +7,14 @@ import net
 from widget_base import Widget, run_widget, ascii_fold, YELLOW, WHITE, CYAN, GREEN
 
 BASE = "https://www.thesportsdb.com/api/v1/json/%s/"
+
+
+def sports_key(value):
+    """The old free key "3" was disabled by TheSportsDB; its free test key is now "123"."""
+    key = str(value or "").strip()
+    return "123" if key in ("", "3") else key
+
+
 TEAM_CACHE = 86400
 EVENT_CACHE = 600
 
@@ -95,7 +103,7 @@ class Sports(Widget):
 
     def fetch(self, cfg):
         """-> (team name, last, next) ; raises NetError when offline."""
-        base = BASE % urllib.parse.quote(str(cfg["api_key"]).strip() or "3", safe="")
+        base = BASE % urllib.parse.quote(sports_key(cfg["api_key"]), safe="")
         team_name = cfg["team"].strip()
         data = net.get_json(base + "searchteams.php?t=" + urllib.parse.quote(team_name),
                             cache_seconds=TEAM_CACHE)
